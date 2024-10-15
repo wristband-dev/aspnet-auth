@@ -1,0 +1,4 @@
+- [ ] Add an unprotected home page with a top level login button
+- [ ] Not currently using the refresh token - just doing a full re-login
+- [ ] Store return_url somewhere for use after successful login
+- [ ] apply return_url stored previously from query string

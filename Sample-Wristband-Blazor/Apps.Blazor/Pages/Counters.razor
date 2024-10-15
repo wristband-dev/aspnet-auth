@@ -1,0 +1,49 @@
+﻿@page "/counters"
+
+@inject NavigationManager NavigationManager
+@inject HttpClient HttpClient
+
+<PageTitle>Counter</PageTitle>
+
+<h1>Counters</h1>
+
+<div style="display: flex; flex-direction: column; width: 300px;" >
+    <button class="btn btn-primary" style="margin: 10px;" @onclick="IncrementLocalCount">Local count: @mLocalCount</button>
+    <button class="btn btn-primary" style="margin: 10px;" @onclick="IncrementProtectedCount">Protected API count: @mProtectedCount</button>
+    <button class="btn btn-primary" style="margin: 10px;" @onclick="IncrementUnprotectedCount">Unprotected API count: @mUnprotectedCount</button>
+</div>
+
+@code {
+    private int mLocalCount = 0;
+    private int mProtectedCount = 0;
+    private int mUnprotectedCount = 0;
+
+    private void IncrementLocalCount()
+    {
+        mLocalCount++;
+    }
+
+    private async Task IncrementProtectedCount()
+    {
+        var baseUri = NavigationManager.BaseUri;
+        var apiServerLogoutUrl = $"{baseUri}api/protected";
+        var response = await HttpClient.GetAsync(apiServerLogoutUrl);
+        var counterResponse = await response.Content.ReadFromJsonAsync<CounterResponse>();
+        mProtectedCount += counterResponse.Value;
+    }
+
+    private async Task IncrementUnprotectedCount()
+    {
+        var baseUri = NavigationManager.BaseUri;
+        var apiServerLogoutUrl = $"{baseUri}api/unprotected";
+        var response = await HttpClient.GetAsync(apiServerLogoutUrl);
+        var counterResponse = await response.Content.ReadFromJsonAsync<CounterResponse>();
+        mUnprotectedCount += counterResponse.Value;
+    }
+
+    private class CounterResponse
+    {
+        public string Message { get; set; }
+        public int Value { get; set; }
+    }
+}

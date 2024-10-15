@@ -1,0 +1,37 @@
+@inject NavigationManager NavigationManager
+@inject HttpClient HttpClient
+@inject CustomAuthenticationStateProvider AuthenticationStateProvider
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        //
+        // Fetch the wristband logout URL from the API and then navigate to it
+        //
+        try
+        {
+            await AuthenticationStateProvider.RemoveCurrentUserAsync();
+
+            var baseUri = NavigationManager.BaseUri;
+            var apiServerLogoutUrl = $"{baseUri}api/logout";
+            var response = await HttpClient.GetAsync(apiServerLogoutUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var logoutUrl = await response.Content.ReadFromJsonAsync<string>();
+                if (!string.IsNullOrWhiteSpace(logoutUrl))
+                {
+                    NavigationManager.NavigateTo(logoutUrl, true);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Failed to fetch logout URL: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle errors gracefully
+            Console.WriteLine($"Error during logout redirect: {ex.Message}");
+        }
+    }
+}

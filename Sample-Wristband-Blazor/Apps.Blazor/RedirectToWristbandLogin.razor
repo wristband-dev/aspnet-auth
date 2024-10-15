@@ -1,0 +1,57 @@
+@using Microsoft.AspNetCore.WebUtilities;
+
+@inject NavigationManager NavigationManager
+@inject HttpClient HttpClient
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        //
+        // Fetch the wristband login URL from the API and then navigate to it
+        //
+        try
+        {
+            var apiServerLoginUrl = GetApiServerLoginUrl();
+            var response = await HttpClient.GetAsync(apiServerLoginUrl);
+            if (response.IsSuccessStatusCode)
+            {
+                var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+                var loginUrl = loginResponse?.WristbandLoginUrl;
+                if (!string.IsNullOrWhiteSpace(loginUrl))
+                {
+                    NavigationManager.NavigateTo(loginUrl, true);
+                }
+            }
+            else
+            {
+                Console.WriteLine($"Failed to fetch login URL: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            // Handle errors gracefully
+            Console.WriteLine($"Error during login redirect: {ex.Message}");
+        }
+    }
+
+    private string GetApiServerLoginUrl()
+    {
+        var returnUrl = Uri.EscapeDataString(NavigationManager.Uri);
+        var loginHint = string.Empty;
+        var uri = NavigationManager.ToAbsoluteUri(NavigationManager.Uri);
+        if (QueryHelpers.ParseQuery(uri.Query).TryGetValue("login_hint", out var loginHintValue))
+        {
+            loginHint = loginHintValue;
+        }
+
+        var baseUri = NavigationManager.BaseUri;
+        return string.IsNullOrEmpty(loginHint)
+            ? $"{baseUri}api/login?return_url={returnUrl}"
+            : $"{baseUri}api/login?return_url={returnUrl}&login_hint={Uri.EscapeDataString(loginHint)}";
+    }
+
+    public class LoginResponse
+    {
+        public string WristbandLoginUrl { get; set; }
+    }
+}
