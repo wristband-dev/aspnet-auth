@@ -18,11 +18,15 @@
 ```
 6. Add the required nuget packages to your Blazor WebAssembly .csproj:
 ```xml
-        ...
-        <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.10" />
-        <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.10" />
-        <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
-        ...
+...
+<ItemGroup>
+  ...
+  <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.10" />
+  <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.10" />
+  <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+  ...
+</ItemGroup>
+...
 ```
 7. Add the required `using` entries to your `Program.cs`
 ```csharp
@@ -76,10 +80,10 @@ app.MapWristbandEndpoints();
 ## Add Wristband to your TypeScript/React/Vite Frontend
 
 1. Copy the 4 wristband files from the `Sample-Wristband-React/clientApp/src` folder into your frontend project
-  - `wristbandApiClient.ts`
-  - `WristbandAuthProvider.tsx`
-  - `WristbandTenantProvider.tsx`
-  - `wristbandUtils.ts`
+- `wristbandApiClient.ts`
+- `WristbandAuthProvider.tsx`
+- `WristbandTenantProvider.tsx`
+- `wristbandUtils.ts`
 
 2. Add the following to your `clientApp/src/App.tsx` file:
 ```tsx
@@ -109,13 +113,25 @@ const disableAuthForTesting = false;
 ## Add Wristband to your Blazor WebAssembly Frontend
 
 1. Copy the 5 wristband files from the `Sample-Wristband-Blazor/Apps.Blazor` folder into your frontend project
-  - `CustomAuthenticationLocalStorageService.cs`
-  - `CustomAuthenticationStateProvider.cs`
-  - `CustomAuthenticationUser.cs`
-  - `RedirectToWristbandLogin.razor`
-  - `RedirectToWristbandLogout.razor`
+- `CustomAuthenticationLocalStorageService.cs`
+- `CustomAuthenticationStateProvider.cs`
+- `CustomAuthenticationUser.cs`
+- `RedirectToWristbandLogin.razor`
+- `RedirectToWristbandLogout.razor`
+2. Add the following nuget packages to your frontend project .csproj file
+```xml
+...
+<ItemGroup>
+  ...
+  <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="8.0.10" />
+  <PackageReference Include="Microsoft.AspNetCore.WebUtilities" Version="8.0.10" />
+  <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
+  ...
+</ItemGroup>
+...
+```
 
-2. In your App.razor file, wrap the `<Router AppAssembly="@typeof(App).Assembly">` component with:
+3. In your App.razor file, wrap the `<Router AppAssembly="@typeof(App).Assembly">` component with:
 ```razor
 @using Microsoft.AspNetCore.Components.Authorization
 
