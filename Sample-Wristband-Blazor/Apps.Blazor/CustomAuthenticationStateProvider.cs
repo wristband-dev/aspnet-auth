@@ -1,10 +1,9 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using System.Net.Http.Json;
 using System.Security.Claims;
 
-namespace Apps.Blazor;
-
-using Microsoft.AspNetCore.Components;
+namespace Wristband;
 
 public class CustomAuthenticationStateProvider : AuthenticationStateProvider
 {

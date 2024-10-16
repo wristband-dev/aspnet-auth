@@ -1,4 +1,4 @@
-namespace Apps.Blazor;
+namespace Wristband;
 
 public class CustomAuthenticationUser
 {

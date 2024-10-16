@@ -1,7 +1,7 @@
 using Microsoft.JSInterop;
 using System.Text.Json;
 
-namespace Apps.Blazor;
+namespace Wristband;
 
 public class CustomAuthenticationLocalStorageService
 {

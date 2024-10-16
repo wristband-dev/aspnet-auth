@@ -142,6 +142,7 @@ const disableAuthForTesting = false;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Wristband;
 ```
 6. Add the following services code to Program.cs
 ```csharp
