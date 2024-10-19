@@ -19,7 +19,7 @@ cloudflared tunnel create mytunnelname
 ```
 - Assign a subdomain to your tunnel. Note that you can have multiple subdomains that point at the public end of your tunnel.
 ```
-cloudflare tunnel route dns mytunnelname mysubdomainname
+cloudflared tunnel route dns mytunnelname mysubdomainname
 ```
 - list your available tunnels via `cloudflared tunnel list`
 - Create a `~/.cloudflared/config.yml` file containing the tunnel identifier and correct port number for your localhost service. NOTE: in our example we are using a http endpoint which we currently have running on 6001 instead of our locah https endpoint which we currently have running on 7001. NOTE ALSO: You can add additional CNAMES and that connect to additional local services by adding additional `- hostname:` and `  service` pairs.
