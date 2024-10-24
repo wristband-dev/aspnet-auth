@@ -185,7 +185,6 @@ public class WristbandAuthService : IWristbandAuthService
 
         SetWristbandSessionKeys(context, callbackData, roles);
 
-
         return null;
     }
 

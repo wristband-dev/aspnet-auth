@@ -14,12 +14,12 @@
         {
             await AuthenticationStateProvider.RemoveCurrentUserAsync();
 
-            var baseUri = NavigationManager.BaseUri;
-            var apiServerLogoutUrl = $"{baseUri}api/logout";
+            var apiServerLogoutUrl = GetApiServerLogoutUrl();
             var response = await HttpClient.GetAsync(apiServerLogoutUrl);
             if (response.IsSuccessStatusCode)
             {
-                var logoutUrl = await response.Content.ReadFromJsonAsync<string>();
+                var logoutResponse = await response.Content.ReadFromJsonAsync<LogoutResponse>();
+                var logoutUrl = logoutResponse?.WristbandLogoutUrl;
                 if (!string.IsNullOrWhiteSpace(logoutUrl))
                 {
                     NavigationManager.NavigateTo(logoutUrl, true);
@@ -33,7 +33,19 @@
         catch (Exception ex)
         {
             // Handle errors gracefully
-            Console.WriteLine($"Error during logout redirect: {ex.Message}");
+            Console.WriteLine($"Error during logout: {ex.Message}");
         }
     }
+
+    private string GetApiServerLogoutUrl()
+    {
+        var baseUri = NavigationManager.BaseUri;
+        return $"{baseUri}api/logout";
+    }
+
+    public class LogoutResponse
+    {
+        public string WristbandLogoutUrl { get; set; }
+    }
 }
+

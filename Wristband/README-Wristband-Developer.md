@@ -13,7 +13,9 @@ Display Name: Some Test
 Tenant Classifier: Tenant
 
 Login URL: https://{tenant_domain}.mydomain.com/
-Logout URLs: https://{tenant_domain}.mydomain.com/
+Logout URLs: 
+    https://{tenant_domain}.mydomain.com/
+    https://myapp-mytenant-mywristband.us.wristband.dev/login
 ```
 
 ## Create Wristband Application OAuth2 Clients##
