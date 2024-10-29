@@ -2,7 +2,9 @@ namespace Wristband;
 
 public class AuthConfig {
     public string ClientId { get; set; }
+    public string ClientIdForManagingUserMetadata { get; set; }
     public string ClientSecret { get; set; }
+    public string ClientSecretForManagingUserMetadata { get; set; }
     public string CustomApplicationLoginPageUrl { get; set; }
     public bool DangerouslyDisableSecureCookies { get; set; }
     public string LoginStateSecret { get; set; }
@@ -18,7 +20,7 @@ public class AuthConfig {
 
 public class CallbackData : TokenData {
     public Dictionary<string, object> CustomState { get; set; }
-    public Userinfo? Userinfo { get; set; }
+    public UserInfo? Userinfo { get; set; }
 }
 
 public class LoginConfig {
@@ -37,7 +39,7 @@ public class TokenData {
     public string RefreshToken { get; set; }
 }
 
-public class Userinfo : Dictionary<string, object> {}
+public class UserInfo : Dictionary<string, object> {}
 
 public class WristbandError : Exception {
     public string Error { get; }

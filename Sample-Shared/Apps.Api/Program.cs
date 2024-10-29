@@ -32,7 +32,7 @@ services.AddScoped<IWristbandAuthService>(serviceProvider =>
     var loginConfig = serviceProvider.GetRequiredService<IOptions<LoginConfig>>().Value;
     var logoutConfig = serviceProvider.GetRequiredService<IOptions<LogoutConfig>>().Value;
     var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
-    return new WristbandAuthService(httpClientFactory, authConfig, loginConfig, logoutConfig);
+    return new WristbandAuthService(httpClientFactory, authConfig, loginConfig, logoutConfig, null);
 });
 
 services.AddEndpointsApiExplorer();

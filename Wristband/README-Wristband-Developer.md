@@ -30,6 +30,17 @@ Name: client01
 Authorization Callback Url: https://{tenant_domain}.mydomain.com/api/auth/callback
 ```
 
+clientForManagingUserMetadata
+```csharp
+Client ID: --some-identifier--
+Client Type: Backend Server
+
+Must be assigned a role with:
+    Permission Boundary dropdown set to "Application"
+    user:manage-restricted-metadata
+    user:read
+    user:update
+```
 
 ## Create Wristband Tenants:##
 

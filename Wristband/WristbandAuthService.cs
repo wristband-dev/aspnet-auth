@@ -17,6 +17,7 @@ public interface IWristbandAuthService
     string LoginCompleted(HttpContext context);
     Task<string> Logout(HttpContext context);
     Task<TokenData?> RefreshTokenIfExpired(string? refreshToken, long? expiresAt);
+    Task<bool> PatchUser(string userId, Dictionary<string, object> patchUser);
 }
 
 public class WristbandAuthService : IWristbandAuthService
@@ -26,17 +27,20 @@ public class WristbandAuthService : IWristbandAuthService
     private readonly AuthConfig mAuthConfig;
     private readonly LoginConfig mLoginConfig;
     private readonly LogoutConfig mLogoutConfig;
+    private readonly Func<HttpContext, string, UserInfo, Task<string>>? mCallbackHandler;
 
     public WristbandAuthService(
         IHttpClientFactory httpClientFactory,
         AuthConfig authConfig,
         LoginConfig loginConfig,
-        LogoutConfig logoutConfig)
+        LogoutConfig logoutConfig,
+        Func<HttpContext, string, UserInfo, Task<string>>? callbackHander)
     {
         mAuthConfig = authConfig;
         mLoginConfig = loginConfig;
         mLogoutConfig = logoutConfig;
         mWristbandNetworking = new WristbandNetworking(httpClientFactory, authConfig);
+        mCallbackHandler = callbackHander;
     }
 
     public async Task<string?> Callback(HttpContext context)
@@ -83,39 +87,39 @@ public class WristbandAuthService : IWristbandAuthService
         // NOTE: do NOT replace {tenant_url} in the auth/config redirectUri - wristband will do that for us
         var tenantRedirectUri = mAuthConfig.RedirectUri;
         var tokenResponse = await mWristbandNetworking.GetTokens(code, tenantRedirectUri, loginState.CodeVerifier);
-        var userinfo = await mWristbandNetworking.GetUserinfo(tokenResponse?.AccessToken ?? string.Empty);
+        var userInfo = await mWristbandNetworking.GetUserinfo(tokenResponse?.AccessToken ?? string.Empty);
 
-        if (userinfo == null)
+        if (userInfo == null)
         {
             return tenantLoginUrl;
         }
-
+        
         var userId = "unknown";
-        if (userinfo.TryGetValue("sub", out var userIdObj))
+        if (userInfo.TryGetValue("sub", out var userIdObj))
         {
             userId = userIdObj.ToString() ?? "unknown";
         }
 
         var email = "unknown";
-        if (userinfo.TryGetValue("email", out var emailObj))
+        if (userInfo.TryGetValue("email", out var emailObj))
         {
             email = emailObj.ToString() ?? "unknown";
         }
 
         var name = "unknown";
-        if (userinfo.TryGetValue("name", out var nameObj))
+        if (userInfo.TryGetValue("name", out var nameObj))
         {
             name = nameObj.ToString() ?? "unknown";
         }
 
         var idp = "wristband";
-        if (userinfo.TryGetValue("idp_name", out var idpObj))
+        if (userInfo.TryGetValue("idp_name", out var idpObj))
         {
             idp = idpObj.ToString() ?? "unknown";
         }
 
         var roles = new List<WristbandRole>();
-        if (userinfo.TryGetValue("roles", out var rolesObj))
+        if (userInfo.TryGetValue("roles", out var rolesObj))
         {
             var jsonElement = rolesObj is JsonElement obj ? obj : default;
             if (jsonElement.ValueKind == JsonValueKind.Array)
@@ -180,11 +184,27 @@ public class WristbandAuthService : IWristbandAuthService
             IdToken = tokenResponse?.IdToken ?? string.Empty,
             RefreshToken = tokenResponse?.RefreshToken ?? string.Empty,
             ExpiresIn = tokenResponse?.ExpiresIn ?? 0,
-            Userinfo = userinfo,
+            Userinfo = userInfo,
         };
 
-        SetWristbandSessionKeys(context, callbackData, roles);
+        await SetWristbandSessionKeys(context, callbackData, roles);
 
+        if (mCallbackHandler != null)
+        {
+            // NOTE: the callback data does not include user metadata so need to make a second call to get metadata
+            var user = await mWristbandNetworking.GetUser(userId);
+
+            if (user == null)
+            {
+                return tenantLoginUrl;
+            }
+
+            var userInfoExpanded = MergeUserInfos(userInfo, user);
+
+            return await mCallbackHandler(context, tenantLoginUrl, userInfoExpanded);
+        }
+
+        // returning null indicates success (no redirect to login required)
         return null;
     }
 
@@ -297,6 +317,11 @@ public class WristbandAuthService : IWristbandAuthService
 
         var tokenResponse = await mWristbandNetworking.RefreshToken(refreshToken);
         return tokenResponse;
+    }
+
+    public async Task<bool> PatchUser(string userId, Dictionary<string, object> patchUser)
+    {
+        return await mWristbandNetworking.PatchUser(userId, patchUser);
     }
 
     private static void ClearOldestLoginStateCookies(HttpContext context)
@@ -495,7 +520,7 @@ public class WristbandAuthService : IWristbandAuthService
         return defaultTenantDomain;
     }
 
-    public static async Task SetWristbandSessionKeys(
+    private static async Task SetWristbandSessionKeys(
         HttpContext context,
         CallbackData callbackData,
         List<WristbandRole> roles)
@@ -511,7 +536,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         await context.Session.CommitAsync();
     }
-    public static async Task RefreshWristbandSessionKeys(HttpContext context, TokenData tokenData)
+    internal static async Task RefreshWristbandSessionKeys(HttpContext context, TokenData tokenData)
     {
         context.Session.SetString("wristband:isAuthenticated", string.IsNullOrEmpty(tokenData.AccessToken) ? "false" : "true");
         context.Session.SetString("wristband:accessToken", tokenData.AccessToken);
@@ -524,7 +549,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         await context.Session.CommitAsync();
     }
-    public static async Task RemoveWristbandSessionKeys(HttpContext context)
+    private static async Task RemoveWristbandSessionKeys(HttpContext context)
     {
         context.Session.Remove("wristband:WristbandAuth");
         context.Session.Remove("wristband:isAuthenticated");
@@ -537,24 +562,46 @@ public class WristbandAuthService : IWristbandAuthService
         await context.Session.CommitAsync();
     }
 
-    public static bool GetIsAuthenticated(HttpContext context)
+    internal static bool GetIsAuthenticated(HttpContext context)
     {
         return context.Session.GetString("wristband:isAuthenticated") == "true";
     }
 
-    public static string GetRefreshToken(HttpContext context)
+    internal static string GetRefreshToken(HttpContext context)
     {
         return context.Session.GetString("wristband:refreshToken") ?? string.Empty;
     }
 
-    public static long GetExpiresAt(HttpContext context)
+    internal static long GetExpiresAt(HttpContext context)
     {
         return Int64.Parse(context.Session.GetString("wristband:expiresAt") ?? "0");
     }
 
-    public static List<WristbandRole> GetRoles(HttpContext context)
+    internal static List<WristbandRole> GetRoles(HttpContext context)
     {
         var roles = context.Session.GetString("wristband:roles");
         return JsonSerializer.Deserialize<List<WristbandRole>>(roles ?? "[]")!;
+    }
+
+    private UserInfo MergeUserInfos(UserInfo userinfo1, UserInfo userinfo2)
+    {
+        var result = new UserInfo();
+
+        // Merge the first dictionary into result
+        foreach (var kvp in userinfo1)
+        {
+            result[kvp.Key] = kvp.Value;
+        }
+
+        // Merge the second dictionary into result (assumes values with the same key are the same)
+        foreach (var kvp in userinfo2)
+        {
+            if (!result.ContainsKey(kvp.Key))
+            {
+                result[kvp.Key] = kvp.Value;
+            }
+        }
+
+        return result;
     }
 }
