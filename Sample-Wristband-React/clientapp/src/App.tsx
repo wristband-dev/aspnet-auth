@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
-import "./App.css";
-import styles from "./App.module.css";
-
+import { Router } from "./Router";
 import { WristbandAuthProvider } from "./WristbandAuthProvider";
 import { WristbandTenantProvider } from "./WristbandTenantProvider";
-import HomePage from "./HomePage";
+
+import "./App.css";
+import styles from "./App.module.css";
 
 import otherLogo from "./assets/other-logo.svg";
 
@@ -39,12 +39,8 @@ function App() {
                     </div>
                 }
             >
-                <WristbandTenantProvider
-                    tenants={{
-                        default: { name: "Other", logo: otherLogo },
-                    }}
-                >
-                    <HomePage />
+                <WristbandTenantProvider tenants={{ default: { name: "Other", logo: otherLogo }}}>
+                    <Router />
                 </WristbandTenantProvider>
             </WristbandAuthProvider>
             { false && <ReactQueryDevtools initialIsOpen={false} position="bottom-right" />}

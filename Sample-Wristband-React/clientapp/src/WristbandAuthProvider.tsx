@@ -38,7 +38,7 @@ function WristbandAuthProvider({ children, disableAuthForTesting, securing }: Pr
                     setIsAuthenticated("not-authenticated");
                     const params = new URLSearchParams(window.location.search);
                     const loginHint = params.get("login_hint") ?? "";
-                    redirectToLogin(loginHint);
+                    await redirectToLogin(loginHint);
                 } else {
                     /* WRISTBAND_TOUCHPOINT - AUTHENTICATION */
 
@@ -59,7 +59,7 @@ function WristbandAuthProvider({ children, disableAuthForTesting, securing }: Pr
             } catch (error) {
                 console.log(error);
                 setIsAuthenticated("not-authenticated");
-                redirectToLogout();
+                await redirectToLogout();
             }
         };
   

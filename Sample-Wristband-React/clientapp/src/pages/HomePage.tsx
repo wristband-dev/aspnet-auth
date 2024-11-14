@@ -1,9 +1,9 @@
 import { useCallback, useState } from "react";
-import csharpLogo from "./assets/csharp.png";
-import reactLogo from "./assets/react.svg";
-import wristbandLogo from "./assets/wristband.png";
+import csharpLogo from "../assets/csharp.png";
+import reactLogo from "../assets/react.svg";
+import wristbandLogo from "../assets/wristband.png";
 
-import { redirectToLogout } from "./wristbandUtils";
+import { redirectToLogout } from "../wristbandUtils";
 
 const HomePage = () => {
     const [count, setCount] = useState(0);
@@ -60,4 +60,4 @@ const HomePage = () => {
     );
 };
 
-export default HomePage;
+export { HomePage };
