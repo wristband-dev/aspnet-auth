@@ -1,0 +1,46 @@
+name: Test
+
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+    branches:
+      - main
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        dotnet-version: ['6.0.x', '7.0.x', '8.0.x']
+    name: Test .NET ${{ matrix.dotnet-version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Restore local tools (src)
+        run: cd ./src && dotnet tool restore && cd ../
+
+      - name: Restore local tools (tests)
+        run: cd ./tests && dotnet tool restore && cd ../
+
+      - name: Build
+        run: dotnet build --no-restore
+
+      - name: Check code formatting
+        run: dotnet format --verify-no-changes
+
+      - name: Test
+        run: dotnet test --no-restore --no-build --verbosity normal

@@ -45,6 +45,9 @@ Generated\ Files/
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
+**/.[Tt]est[Rr]esult*/
+[Cc]overage[Rr]eport*/
+**/[Cc]overage[Rr]eport*/
 [Bb]uild[Ll]og.*
 
 # NUnit
@@ -64,6 +67,7 @@ BenchmarkDotNet.Artifacts/
 project.lock.json
 project.fragment.lock.json
 artifacts/
+package/
 
 # Tye
 .tye/

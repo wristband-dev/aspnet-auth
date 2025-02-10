@@ -1,0 +1,51 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  nuget-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Restore local tools (src)
+        run: cd ./src && dotnet tool restore && cd ../
+
+      - name: Restore local tools (tests)
+        run: cd ./tests && dotnet tool restore && cd ../
+      
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Check code formatting
+        run: dotnet format --verify-no-changes
+      
+      - name: Test
+        run: dotnet test --configuration Release --no-restore --no-build --verbosity normal
+      
+      - name: Pack
+        run: dotnet pack --configuration Release --no-restore --no-build
+      
+      - name: Publish to NuGet
+        run: dotnet nuget push "src/bin/Release/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

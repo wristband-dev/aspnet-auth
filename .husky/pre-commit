@@ -1,0 +1,14 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+# Return to the root directory (this will be the root of your Git repo)
+cd "$(git rev-parse --show-toplevel)"
+
+# Your commands
+dotnet restore
+cd ./src && dotnet tool restore && cd ..
+cd ./tests && dotnet tool restore && cd ..
+dotnet build --configuration Release --no-restore
+dotnet format --verify-no-changes
+dotnet test --configuration Release --no-restore --no-build --verbosity normal
+dotnet pack --configuration Release --no-restore --no-build
