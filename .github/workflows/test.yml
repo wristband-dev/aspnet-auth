@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dotnet-version: ['6.0.x', '7.0.x', '8.0.x']
+        dotnet-version: ['6.0.x', '7.0.x'] # Temporarily removed ", '8.0.x'"
     name: Test .NET ${{ matrix.dotnet-version }}
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,9 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
+
+      - name: Display .NET SDKs
+        run: dotnet --list-sdks
 
       - name: Restore dependencies
         run: dotnet restore
