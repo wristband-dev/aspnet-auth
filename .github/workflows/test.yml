@@ -18,7 +18,6 @@ jobs:
     strategy:
       matrix:
         dotnet-version: ['6.0.x', '7.0.x', '8.0.x']
-      fail-fast: false 
     name: Test .NET ${{ matrix.dotnet-version }}
     steps:
       - uses: actions/checkout@v4
@@ -27,28 +26,71 @@ jobs:
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
-          include-prerelease: false
-
-      - name: Display dotnet info
+    
+      - name: Restore tools
         run: |
-          dotnet --info
-          dotnet --list-sdks
-          dotnet --list-runtimes
+          cd ./src && dotnet tool restore && cd ../
+          cd ./tests && dotnet tool restore && cd ../
 
-      - name: Restore dependencies
-        run: dotnet restore
+      - name: Restore .NET 6
+        if: ${{ matrix.dotnet-version == '6.0.x' }}
+        run: dotnet restore --framework net6.0
 
-      - name: Restore local tools (src)
-        run: cd ./src && dotnet tool restore && cd ../
+      - name: Restore .NET 7
+        if: ${{ matrix.dotnet-version == '7.0.x' }}
+        run: dotnet restore --framework net7.0
 
-      - name: Restore local tools (tests)
-        run: cd ./tests && dotnet tool restore && cd ../
+      - name: Restore .NET 8
+        if: ${{ matrix.dotnet-version == '8.0.x' }}
+        run: dotnet restore --framework net8.0
 
-      - name: Build
-        run: dotnet build --no-restore
+      - name: Build .NET 6
+        if: ${{ matrix.dotnet-version == '6.0.x' }}
+        run: dotnet build --framework net6.0 --no-restore
+
+      - name: Build .NET 7
+        if: ${{ matrix.dotnet-version == '7.0.x' }}
+        run: dotnet build --framework net7.0 --no-restore
+
+      - name: Build .NET 8
+        if: ${{ matrix.dotnet-version == '8.0.x' }}
+        run: dotnet build --framework net8.0 --no-restore
 
       - name: Check code formatting
         run: dotnet format --verify-no-changes
 
-      - name: Test
-        run: dotnet test --no-restore --no-build --verbosity normal
+      - name: Test .NET 6
+        if: ${{ matrix.dotnet-version == '6.0.x' }}
+        run: dotnet test --framework net6.0 --no-restore --no-build --verbosity normal
+
+      - name: Test .NET 7
+        if: ${{ matrix.dotnet-version == '7.0.x' }}
+        run: dotnet test --framework net7.0 --no-restore --no-build --verbosity normal
+
+      - name: Test .NET 8
+        if: ${{ matrix.dotnet-version == '8.0.x' }}
+        run: dotnet test --framework net8.0 --no-restore --no-build --verbosity normal
+
+      # - name: Display dotnet info
+      #   run: |
+      #     dotnet --info
+      #     dotnet --list-sdks
+      #     dotnet --list-runtimes
+
+      # - name: Restore dependencies
+      #   run: dotnet restore
+
+      # - name: Restore local tools (src)
+      #   run: cd ./src && dotnet tool restore && cd ../
+
+      # - name: Restore local tools (tests)
+      #   run: cd ./tests && dotnet tool restore && cd ../
+
+      # - name: Build
+      #   run: dotnet build --no-restore
+
+      # - name: Check code formatting
+      #   run: dotnet format --verify-no-changes
+
+      # - name: Test
+      #   run: dotnet test --no-restore --no-build --verbosity normal
