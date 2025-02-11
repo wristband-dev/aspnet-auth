@@ -31,7 +31,7 @@ jobs:
         run: dotnet --list-sdks
 
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore -p:TargetFramework=net${{ matrix.dotnet-version }}
 
       - name: Restore local tools (src)
         run: cd ./src && dotnet tool restore && cd ../
