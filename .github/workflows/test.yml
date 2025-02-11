@@ -15,11 +15,11 @@ on:
 jobs:
   test:
     name: Test .NET ${{ matrix.dotnet }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         dotnet: ['6', '7', '8']
-    #     os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -31,28 +31,15 @@ jobs:
 
       - name: Display dotnet info
         run: |
-          dotnet --version
           dotnet --info
           dotnet --list-sdks
           dotnet --list-runtimes
+
       - name: Restore dependencies
         run: dotnet restore -p:TargetFramework=net${{ matrix.dotnet }}.0
+
       - name: Build
         run: dotnet build --no-restore --framework net${{ matrix.dotnet }}.0
+
       - name: Test
         run: dotnet test --no-restore --no-build --verbosity normal --framework net${{ matrix.dotnet }}.0
-
-      # - name: Restore local tools (src)
-      #   run: cd ./src && dotnet tool restore && cd ../
-
-      # - name: Restore local tools (tests)
-      #   run: cd ./tests && dotnet tool restore && cd ../
-
-      # - name: Build
-      #   run: dotnet build --no-restore
-
-      # - name: Check code formatting
-      #   run: dotnet format --verify-no-changes
-
-      # - name: Test
-      #   run: dotnet test --no-restore --no-build --verbosity normal
