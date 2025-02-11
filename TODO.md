@@ -1,0 +1,2 @@
+- Enhance README to match other Wristband SDK documentation
+- Complete remaining unit test coverage

@@ -1,4 +1,4 @@
-## Create Wristband Application:##
+## Create Wristband Application:
 
 Some Prod
 ```
@@ -17,7 +17,7 @@ Logout URLs:
     https://myapp-mytenant-mywristband.us.wristband.dev/login
 ```
 
-## Create Wristband Application OAuth2 Clients##
+## Create Wristband Application OAuth2 Clients
 
 client01
 ```
@@ -41,7 +41,7 @@ Must be assigned a role with:
     user:update
 ```
 
-## Create Wristband Tenants:##
+## Create Wristband Tenants:
 
 One
 ```

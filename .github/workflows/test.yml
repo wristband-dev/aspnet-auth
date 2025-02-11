@@ -14,7 +14,7 @@ on:
 
 jobs:
   test:
-    name: Test .NET ${{ matrix.dotnet }}
+    name: Test .NET ${{ matrix.dotnet }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
