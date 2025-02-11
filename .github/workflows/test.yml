@@ -14,12 +14,11 @@ on:
 
 jobs:
   test:
-    # name: Test .NET ${{ matrix.dotnet }}
-    name: Test .NET 6
+    name: Test .NET ${{ matrix.dotnet-version }}
     runs-on: ubuntu-latest
-    # strategy:
-    #   matrix:
-    #     dotnet: ['6', '7', '8']
+    strategy:
+      matrix:
+        dotnet-version: ['6.0.x', '7.0.x', '8.0.x']
     #     os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout code
@@ -32,8 +31,6 @@ jobs:
             6.0.x
             7.0.x
             8.0.x
-        # with:
-        #   dotnet-version: ${{ matrix.dotnet }}.0.x
 
       - name: Display dotnet info
         run: |
