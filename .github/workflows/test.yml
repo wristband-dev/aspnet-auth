@@ -18,6 +18,7 @@ jobs:
     strategy:
       matrix:
         dotnet-version: ['6.0.x', '7.0.x', '8.0.x']
+      fail-fast: false 
     name: Test .NET ${{ matrix.dotnet-version }}
     steps:
       - uses: actions/checkout@v4
@@ -26,9 +27,13 @@ jobs:
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
+          include-prerelease: false
 
-      - name: Display .NET SDKs
-        run: dotnet --list-sdks
+      - name: Display dotnet info
+        run: |
+          dotnet --info
+          dotnet --list-sdks
+          dotnet --list-runtimes
 
       - name: Restore dependencies
         run: dotnet restore
