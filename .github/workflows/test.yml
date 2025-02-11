@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dotnet-version: ['6.0.x', '7.0.x', '8.0.x']
+        dotnet-version: ['6', '7', '8']
     #     os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout code
@@ -31,21 +31,16 @@ jobs:
           #   6.0.x
           #   7.0.x
           #   8.0.x
-          dotnet-version: ${{ matrix.dotnet-version }}
+          dotnet-version: ${{ matrix.dotnet-version }}.0.x
 
       - name: Display dotnet info
         run: |
+          dotnet --version
           dotnet --info
           dotnet --list-sdks
           dotnet --list-runtimes
-      - name: Switch to .NET SDK ${{ matrix.dotnet-version }}
-        run: |
-          export DOTNET_ROOT="/usr/share/dotnet"
-          export PATH="$DOTNET_ROOT/sdk/${{ matrix.dotnet-version }}/bin:$PATH"
-          echo "Switched to .NET SDK version ${{ matrix.dotnet-version }} on Linux"
-          dotnet --version
       - name: Restore dependencies
-        run: dotnet restore
+        run: dotnet restore -p:TargetFramework=net${{ matrix.dotnet-version }}.0
       - name: Build
         run: dotnet build --no-restore
       - name: Test
