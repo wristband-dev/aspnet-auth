@@ -10,5 +10,5 @@ cd ./src && dotnet tool restore && cd ..
 cd ./tests && dotnet tool restore && cd ..
 dotnet build --configuration Release --no-restore
 dotnet format --verify-no-changes
-dotnet test --configuration Release --no-restore --no-build --verbosity normal
+dotnet test --configuration Release --no-restore --no-build --framework net8.0 --verbosity normal
 dotnet pack --configuration Release --no-restore --no-build
