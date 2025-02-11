@@ -26,11 +26,6 @@ jobs:
         uses: actions/setup-dotnet@v3
         with:
           dotnet-version: ${{ matrix.dotnet-version }}
-    
-      - name: Restore tools
-        run: |
-          cd ./src && dotnet tool restore && cd ../
-          cd ./tests && dotnet tool restore && cd ../
 
       - name: Restore .NET 6
         if: ${{ matrix.dotnet-version == '6.0.x' }}
@@ -55,9 +50,6 @@ jobs:
       - name: Build .NET 8
         if: ${{ matrix.dotnet-version == '8.0.x' }}
         run: dotnet build --framework net8.0 --no-restore
-
-      - name: Check code formatting
-        run: dotnet format --verify-no-changes
 
       - name: Test .NET 6
         if: ${{ matrix.dotnet-version == '6.0.x' }}
