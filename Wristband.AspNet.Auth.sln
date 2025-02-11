@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wristband.AspNet.Auth", "src\Wristband.AspNet.Auth.csproj", "{356C8B73-2045-4FD4-B289-382B45EF2DB2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Wristband.AspNet.Auth.Tests", "tests\Wristband.AspNet.Auth.Tests.csproj", "{BBFE8510-39D1-4B10-B0AE-2FF2DA715E44}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{356C8B73-2045-4FD4-B289-382B45EF2DB2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{356C8B73-2045-4FD4-B289-382B45EF2DB2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{356C8B73-2045-4FD4-B289-382B45EF2DB2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{356C8B73-2045-4FD4-B289-382B45EF2DB2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BBFE8510-39D1-4B10-B0AE-2FF2DA715E44}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBFE8510-39D1-4B10-B0AE-2FF2DA715E44}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBFE8510-39D1-4B10-B0AE-2FF2DA715E44}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBFE8510-39D1-4B10-B0AE-2FF2DA715E44}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

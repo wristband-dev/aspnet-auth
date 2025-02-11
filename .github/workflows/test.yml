@@ -1,0 +1,45 @@
+name: Test
+
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+    branches:
+      - main
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+
+jobs:
+  test:
+    name: Test .NET ${{ matrix.dotnet }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        dotnet: ['6', '7', '8']
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet }}.0.x
+
+      - name: Display dotnet info
+        run: |
+          dotnet --info
+          dotnet --list-sdks
+          dotnet --list-runtimes
+
+      - name: Restore dependencies
+        run: dotnet restore -p:TargetFramework=net${{ matrix.dotnet }}.0
+
+      - name: Build
+        run: dotnet build --no-restore --framework net${{ matrix.dotnet }}.0
+
+      - name: Test
+        run: dotnet test --no-restore --no-build --verbosity normal --framework net${{ matrix.dotnet }}.0
