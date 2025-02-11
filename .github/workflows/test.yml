@@ -39,7 +39,8 @@ jobs:
           dotnet --list-runtimes
       - name: Switch to .NET SDK ${{ matrix.dotnet-version }}
         run: |
-          export DOTNET_ROOT="/usr/share/dotnet/sdk/${{ matrix.dotnet-version }}"
+          export DOTNET_ROOT="/usr/share/dotnet"
+          export PATH="$DOTNET_ROOT/sdk/${{ matrix.dotnet-version }}/bin:$PATH"
           echo "Switched to .NET SDK version ${{ matrix.dotnet-version }} on Linux"
           dotnet --version
       - name: Restore dependencies
