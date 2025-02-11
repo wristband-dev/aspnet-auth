@@ -14,11 +14,11 @@ on:
 
 jobs:
   test:
-    name: Test .NET ${{ matrix.dotnet-version }}
+    name: Test .NET ${{ matrix.dotnet }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        dotnet-version: ['6', '7', '8']
+        dotnet: ['6', '7', '8']
     #     os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout code
@@ -27,7 +27,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ matrix.dotnet-version }}.0.x
+          dotnet-version: ${{ matrix.dotnet }}.0.x
 
       - name: Display dotnet info
         run: |
