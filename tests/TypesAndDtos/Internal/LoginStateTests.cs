@@ -1,8 +1,3 @@
-using System;
-using System.Collections.Generic;
-
-using Xunit;
-
 namespace Wristband.AspNet.Auth.Tests
 {
     public class LoginStateTests

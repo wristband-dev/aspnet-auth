@@ -1,7 +1,5 @@
 using System.Text.Json;
 
-using Xunit;
-
 namespace Wristband.AspNet.Auth.Tests
 {
     public class TokenResponseErrorTests

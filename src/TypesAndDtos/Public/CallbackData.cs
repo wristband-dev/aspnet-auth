@@ -1,0 +1,88 @@
+namespace Wristband.AspNet.Auth;
+
+/// <summary>
+/// Represents the full set of token, user, and login state data received after the callback completes.
+/// </summary>
+public class CallbackData : TokenData
+{
+    /// <summary>
+    /// Gets an empty instance of the <see cref="CallbackData"/> class.
+    /// </summary>
+    public static readonly CallbackData Empty = new CallbackData(
+        accessToken: "empty",
+        expiresIn: 0,
+        idToken: "empty",
+        refreshToken: null,
+        userinfo: UserInfo.Empty,
+        tenantDomainName: "empty",
+        tenantCustomDomain: null,
+        customState: null,
+        returnUrl: null);
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CallbackData"/> class with the specified data.
+    /// </summary>
+    /// <param name="accessToken">The access token.</param>
+    /// <param name="expiresIn">The expiration time of the access token (in seconds).</param>
+    /// <param name="idToken">The ID token.</param>
+    /// <param name="refreshToken">The refresh token (optional).</param>
+    /// <param name="userinfo">The user information.</param>
+    /// <param name="tenantDomainName">The domain name of the tenant the user belongs to.</param>
+    /// <param name="tenantCustomDomain">The custom domain of the tenant (optional).</param>
+    /// <param name="customState">Custom state data received in the callback (optional).</param>
+    /// <param name="returnUrl">The URL to return to after authentication (optional).</param>
+    /// <exception cref="InvalidOperationException">Thrown if any required field is null, empty, or invalid.</exception>
+    public CallbackData(
+        string accessToken,
+        int expiresIn,
+        string idToken,
+        string? refreshToken,
+        UserInfo userinfo,
+        string tenantDomainName,
+        string? tenantCustomDomain,
+        Dictionary<string, object>? customState,
+        string? returnUrl)
+        : base(accessToken, expiresIn, idToken, refreshToken)
+    {
+        if (userinfo == null)
+        {
+            throw new InvalidOperationException("[Userinfo] cannot be null.");
+        }
+
+        if (string.IsNullOrEmpty(tenantDomainName))
+        {
+            throw new InvalidOperationException("[TenantDomainName] cannot be null or empty.");
+        }
+
+        Userinfo = userinfo;
+        TenantDomainName = tenantDomainName;
+        TenantCustomDomain = tenantCustomDomain;
+        CustomState = customState;
+        ReturnUrl = returnUrl;
+    }
+
+    /// <summary>
+    /// Gets the custom state data received in the callback (optional).
+    /// </summary>
+    public Dictionary<string, object>? CustomState { get; }
+
+    /// <summary>
+    /// Gets the user information received in the callback.
+    /// </summary>
+    public UserInfo Userinfo { get; }
+
+    /// <summary>
+    /// Gets the URL to return to after authentication (optional).
+    /// </summary>
+    public string? ReturnUrl { get; }
+
+    /// <summary>
+    /// Gets the domain name of the tenant (or subdomain) the user belongs to.
+    /// </summary>
+    public string TenantDomainName { get; }
+
+    /// <summary>
+    /// Gets the custom domain of the tenant the user belongs to (optional).
+    /// </summary>
+    public string? TenantCustomDomain { get; }
+}
