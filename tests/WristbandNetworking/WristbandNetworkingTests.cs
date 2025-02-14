@@ -1,17 +1,9 @@
-using System;
 using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 using Moq;
 using Moq.Protected;
-
-using Xunit;
-
 
 namespace Wristband.AspNet.Auth.Tests
 {
@@ -54,10 +46,10 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_WithNullConfig_ThrowsArgumentNullException()
         {
-            var exception = Assert.Throws<System.ArgumentNullException>(() => new WristbandNetworking(null!));
+            var exception = Assert.Throws<ArgumentNullException>(() => new WristbandNetworking(null!));
             Assert.Equal("authConfig", exception.ParamName);
 
-            exception = Assert.Throws<System.ArgumentNullException>(() => new WristbandNetworking(null!, null));
+            exception = Assert.Throws<ArgumentNullException>(() => new WristbandNetworking(null!, null));
             Assert.Equal("authConfig", exception.ParamName);
         }
 

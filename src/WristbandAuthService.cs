@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 
 using Microsoft.AspNetCore.Http;
 
@@ -10,13 +9,12 @@ namespace Wristband.AspNet.Auth;
 public class WristbandAuthService : IWristbandAuthService
 {
     private const string TenantDomainToken = "{tenant_domain}";
-    private const string LoginStateCookiePrefix = "login";
-    private const int MaxNumberOfLoginStateCookies = 3;
     private const string LoginRequiredError = "login_required";
     private const int TokenRefreshRetryAttempts = 3;
     private const int DelayBetweenRefreshAttempts = 100; // 100ms
 
-    private readonly WristbandNetworking mWristbandNetworking;
+    private readonly IWristbandNetworking mWristbandNetworking;
+    private readonly ILoginStateHandler mLoginStateHandler;
     private readonly string mClientId;
     private readonly string mCustomApplicationLoginPageUrl;
     private readonly bool mDangerouslyDisableSecureCookies;
@@ -30,12 +28,25 @@ public class WristbandAuthService : IWristbandAuthService
     private readonly string mWristbandApplicationDomain;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WristbandAuthService"/> class.
+    /// Initializes a new instance of the <see cref="WristbandAuthService"/> class for production use.
     /// This constructor validates and configures the necessary settings for authentication.
     /// </summary>
     /// <param name="authConfig">The <see cref="AuthConfig"/> object containing authentication settings.</param>
     /// <exception cref="ArgumentException">Thrown if any required configuration values are missing or invalid.</exception>
     public WristbandAuthService(AuthConfig authConfig)
+        : this(authConfig, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="WristbandAuthService"/> class.
+    /// This constructor validates and configures the necessary settings for authentication.
+    /// This constructor is useful for testing, allowing the injection of a custom <see cref="HttpClient"/>.
+    /// </summary>
+    /// <param name="authConfig">The <see cref="AuthConfig"/> object containing authentication settings.</param>
+    /// <param name="httpClient">Optional custom <see cref="HttpClient"/> to be used for making requests.</param>
+    /// <exception cref="ArgumentException">Thrown if any required configuration values are missing or invalid.</exception>
+    public WristbandAuthService(AuthConfig authConfig, HttpClient? httpClient = null)
     {
         if (string.IsNullOrEmpty(authConfig.ClientId))
         {
@@ -97,7 +108,8 @@ public class WristbandAuthService : IWristbandAuthService
             }
         }
 
-        mWristbandNetworking = new WristbandNetworking(authConfig);
+        mWristbandNetworking = httpClient != null ? new WristbandNetworking(authConfig, httpClient) : new WristbandNetworking(authConfig);
+        mLoginStateHandler = new LoginStateHandler();
 
         mClientId = authConfig.ClientId;
         mCustomApplicationLoginPageUrl = string.IsNullOrEmpty(authConfig.CustomApplicationLoginPageUrl) ? string.Empty : authConfig.CustomApplicationLoginPageUrl;
@@ -139,7 +151,8 @@ public class WristbandAuthService : IWristbandAuthService
             string.IsNullOrEmpty(defaultTenantCustomDomain) &&
             string.IsNullOrEmpty(defaultTenantDomainName))
         {
-            var apploginUrl = mCustomApplicationLoginPageUrl ?? $"https://{mWristbandApplicationDomain}/login";
+            var apploginUrl = !string.IsNullOrEmpty(mCustomApplicationLoginPageUrl)
+                ? mCustomApplicationLoginPageUrl : $"https://{mWristbandApplicationDomain}/login";
             return await Task.FromResult($"{apploginUrl}?client_id={mClientId}");
         }
 
@@ -147,12 +160,10 @@ public class WristbandAuthService : IWristbandAuthService
         var customState = loginConfig.CustomState != null && loginConfig.CustomState.Keys.Any()
             ? loginConfig.CustomState
             : null;
-        var loginState = CreateLoginState(context, mRedirectUri, customState);
 
-        // Clear any stale login state cookies and add a new one fo rthe current request.
-        ClearOldestLoginStateCookies(context);
-        var encryptedLoginState = EncryptLoginState(loginState, mLoginStateSecret);
-        CreateLoginStateCookie(context, loginState.State, encryptedLoginState, mDangerouslyDisableSecureCookies);
+        var loginState = mLoginStateHandler.CreateLoginState(context, mRedirectUri, customState);
+
+        mLoginStateHandler.CreateLoginStateCookie(context, loginState, mLoginStateSecret, mDangerouslyDisableSecureCookies);
 
         // Create the Wristband Authorize Endpoint URL which the user will get redirectd to.
         var queryParams = new Dictionary<string, string>
@@ -164,7 +175,7 @@ public class WristbandAuthService : IWristbandAuthService
             { "scope", string.Join(" ", mScopes) },
             { "code_challenge", CreateCodeChallenge(loginState.CodeVerifier) },
             { "code_challenge_method", "S256" },
-            { "nonce", GenerateRandomString(32) },
+            { "nonce", mLoginStateHandler.GenerateRandomString(32) },
             { "login_hint", context.Request.Query["login_hint"].FirstOrDefault() ?? string.Empty },
         };
 
@@ -254,13 +265,13 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         // Make sure the login state cookie exists, extract it, and set it to be cleared by the server.
-        var loginStateCookie = GetAndClearLoginStateCookie(context);
+        var loginStateCookie = mLoginStateHandler.GetAndClearLoginStateCookie(context, mDangerouslyDisableSecureCookies);
         if (string.IsNullOrEmpty(loginStateCookie))
         {
             return new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, null, tenantLoginUrl);
         }
 
-        var loginState = DecryptLoginState(loginStateCookie, mLoginStateSecret);
+        var loginState = mLoginStateHandler.DecryptLoginState(loginStateCookie, mLoginStateSecret);
         if (loginState == null)
         {
             return new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, null, tenantLoginUrl);
@@ -387,7 +398,7 @@ public class WristbandAuthService : IWristbandAuthService
             throw new ArgumentException("The expiresAt field must be a positive integer");
         }
 
-        if (IsExpired(expiresAt))
+        if (!IsExpired(expiresAt))
         {
             return null;
         }
@@ -432,111 +443,12 @@ public class WristbandAuthService : IWristbandAuthService
         throw new InvalidOperationException("Invalid state reached during refresh token operation.");
     }
 
-    private static void ClearOldestLoginStateCookies(HttpContext context)
-    {
-        // A login cookie is used to store the challenge code while the login process
-        // is happening. Once the login process is complete, the cookie is no longer needed.
-        var cookies = context.Request.Cookies;
-        var orderedLoginCookies = cookies
-            .Where(c => c.Key.StartsWith($"{LoginStateCookiePrefix}#"))
-            .OrderBy(c =>
-            {
-                // Attempt to parse the index part of the key; handle parsing failure.
-                var parts = c.Key.Split('#');
-                return parts.Length > 2 && long.TryParse(parts[2], out var result) ? result : long.MaxValue;
-            })
-            .ToList();
-
-        if (orderedLoginCookies.Count < MaxNumberOfLoginStateCookies)
-        {
-            return;
-        }
-
-        // Delete the oldest login state cookies until we are back under the limit.
-        // We retain 3 login cookies to support users opening the login page in multiple tabs.
-        // Without this, each new login page would overwrite the previous cookie, breaking the flow for existing tabs.
-        var numberOfCookiesToDelete = orderedLoginCookies.Count - MaxNumberOfLoginStateCookies + 1;
-        for (var i = 0; i < numberOfCookiesToDelete; i++)
-        {
-            context.Response.Cookies.Delete(orderedLoginCookies[i].Key);
-        }
-    }
-
-    private static LoginState CreateLoginState(HttpContext context, string redirectUri, Dictionary<string, object>? customState)
-    {
-        var returnUrl = string.Empty;
-
-        if (context.Request.Query.TryGetValue("return_url", out var returnUrlValue))
-        {
-            if (returnUrlValue.Count > 1)
-            {
-                throw new ArgumentException("More than one [return_url] query parameter was encountered.");
-            }
-
-            returnUrl = returnUrlValue.ToString();
-        }
-
-        if (returnUrl.Contains(" "))
-        {
-            throw new ArgumentException("Return URL should not contain spaces.");
-        }
-
-        var loginState = new LoginState(
-            GenerateRandomString(32),
-            GenerateRandomString(32),
-            redirectUri,
-            returnUrl,
-            customState);
-
-        return loginState;
-    }
-
     private static string CreateCodeChallenge(string codeVerifier)
     {
         using var sha256 = SHA256.Create();
         var challengeBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
         var base64 = Convert.ToBase64String(challengeBytes);
         return base64.Replace("+", "-").Replace("/", "_").TrimEnd('=');
-    }
-
-    private static string GenerateRandomString(int length)
-    {
-        using var rng = RandomNumberGenerator.Create();
-        var randomBytes = new byte[length];
-        rng.GetBytes(randomBytes);
-        var base64 = Convert.ToBase64String(randomBytes);
-        return base64.Replace('+', '-').Replace('/', '_').TrimEnd('=');
-    }
-
-    private static string GetAndClearLoginStateCookie(HttpContext context)
-    {
-        // A login cookie is used to store the challenge code while the login process
-        // is happening. Once the login process is complete, the cookie is no longer needed.
-        var state = context.Request.Query["state"].FirstOrDefault() ?? string.Empty;
-
-        // This should resolve to a single cookie with this prefix or no cookie at all if it got cleared or expired.
-        var matchingLoginStateCookies = context.Request.Cookies
-            .Where(c => c.Key.StartsWith($"{LoginStateCookiePrefix}#{state}#"))
-            .OrderBy(c => long.Parse(c.Key?.Split('#')[2] ?? string.Empty))
-            .ToList();
-
-        var allLoginStateCookies = context.Request.Cookies
-            .Where(c => c.Key.StartsWith($"{LoginStateCookiePrefix}#"))
-            .ToList();
-
-        var loginStateCookie = string.Empty;
-
-        if (matchingLoginStateCookies.Count > 0)
-        {
-            loginStateCookie = matchingLoginStateCookies.Last().Value; // use the newest cookie matching the state
-        }
-
-        foreach (var cookie in allLoginStateCookies)
-        {
-            context.Response.Cookies.Delete(cookie.Key);
-        }
-
-        return loginStateCookie;
     }
 
     private static bool IsExpired(long expiresAt)
@@ -559,7 +471,7 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         var subdomain = host.Substring(0, dotIndex);
-        return host.Substring(dotIndex + 1) == rootDomain ? subdomain : string.Empty;
+        return !string.IsNullOrEmpty(rootDomain) && host.Substring(dotIndex + 1) == rootDomain ? subdomain : string.Empty;
     }
 
     private static string ResolveTenantDomainName(HttpContext context, bool useTenantSubdomains, string rootDomain)
@@ -591,73 +503,5 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         return tenantCustomDomainParam ?? string.Empty;
-    }
-
-    private void CreateLoginStateCookie(HttpContext context, string state, string encryptedLoginState, bool dangerouslyDisableSecureCookies)
-    {
-        // Add the new login state cookie (1 hour max age).
-        var cookieOptions = new CookieOptions
-        {
-            HttpOnly = true,
-            MaxAge = TimeSpan.FromHours(1),
-            Path = "/",
-            SameSite = SameSiteMode.Lax,
-            Secure = !dangerouslyDisableSecureCookies,
-        };
-        var cookieName = $"{LoginStateCookiePrefix}#{state}#{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-        context.Response.Cookies.Append(cookieName, encryptedLoginState, cookieOptions);
-    }
-
-    private LoginState DecryptLoginState(string encryptedState, string loginStateSecret)
-    {
-        var parts = encryptedState.Split(new[] { '|' }, 2);
-        var encrypted = Convert.FromBase64String(parts[0]);
-        var iv = Convert.FromBase64String(parts[1]);
-
-        var key = Convert.FromBase64String(loginStateSecret);
-        if (key.Length != 32)
-        {
-            throw new ArgumentException("Invalid key size. Must be 32 bytes for AES-256.");
-        }
-
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.IV = iv;
-
-        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        var decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
-
-        try
-        {
-            var loginState = JsonSerializer.Deserialize<LoginState>(Encoding.UTF8.GetString(decrypted));
-            if (loginState == null)
-            {
-                throw new InvalidOperationException("Failed to deserialize JSON for LoginState.");
-            }
-
-            return loginState;
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException("Invalid JSON format for LoginState.", ex);
-        }
-    }
-
-    // NOTE: Create LoginStateSecret via `openssl rand -base64 32`
-    private string EncryptLoginState(LoginState loginState, string loginStateSecret)
-    {
-        var key = Convert.FromBase64String(loginStateSecret);
-        if (key.Length != 32)
-        {
-            throw new ArgumentException("Invalid key size. Must be 32 bytes for AES-256.");
-        }
-
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.GenerateIV();
-        using var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
-        var plaintext = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(loginState));
-        var encrypted = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
-        return Convert.ToBase64String(encrypted) + "|" + Convert.ToBase64String(aes.IV);
     }
 }
