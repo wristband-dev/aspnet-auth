@@ -8,7 +8,7 @@ namespace Wristband.AspNet.Auth;
 /// <summary>
 /// Contains all code for making REST API calls to the Wristband platform.
 /// </summary>
-internal class WristbandNetworking
+internal class WristbandNetworking : IWristbandNetworking
 {
     private readonly AuthenticationHeaderValue _basicAuthHeader;
     private readonly HttpClient _httpClient;
@@ -17,8 +17,8 @@ internal class WristbandNetworking
     /// <summary>
     /// Initializes a new instance of the <see cref="WristbandNetworking"/> class for production use.
     /// </summary>
-    /// <param name="authConfig">The <see cref="AuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
-    internal WristbandNetworking(AuthConfig authConfig)
+    /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
+    internal WristbandNetworking(WristbandAuthConfig authConfig)
         : this(authConfig, null)
     {
     }
@@ -27,9 +27,9 @@ internal class WristbandNetworking
     /// Initializes a new instance of the <see cref="WristbandNetworking"/> class.
     /// This constructor is useful for testing, allowing the injection of a custom <see cref="HttpClient"/>.
     /// </summary>
-    /// <param name="authConfig">The <see cref="AuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
+    /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
     /// <param name="httpClient">Optional custom <see cref="HttpClient"/> to be used for making requests.</param>
-    internal WristbandNetworking(AuthConfig authConfig, HttpClient? httpClient = null)
+    internal WristbandNetworking(WristbandAuthConfig authConfig, HttpClient? httpClient = null)
     {
         if (authConfig == null)
         {
@@ -63,14 +63,10 @@ internal class WristbandNetworking
     }
 
     /// <summary>
-    /// Calls the Wristband Token Endpoint with the authorization code grant type to exchange an authorization code for tokens.
+    /// Implements <see cref="IWristbandNetworking.GetTokens"/>.
     /// </summary>
-    /// <param name="code">The authorization code received from the OAuth2 authorization server.</param>
-    /// <param name="redirectUri">The redirect URI that was specified in the auth request initially.</param>
-    /// <param name="codeVerifier">The PKCE code verifier to prevent authorization code injection attacks.</param>
-    /// <returns>A <see cref="Task{TokenResponse}"/> representing the asynchronous operation. The result contains the access token, refresh token, and other OAuth2 credentials.</returns>
-    /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
-    internal async Task<TokenResponse> GetTokens(string code, string redirectUri, string codeVerifier)
+    /// <inheritdoc />
+    public async Task<TokenResponse> GetTokens(string code, string redirectUri, string codeVerifier)
     {
         var formParams = new Dictionary<string, string>
         {
@@ -103,7 +99,7 @@ internal class WristbandNetworking
 
                 if (string.Equals(tokenErrorResponse.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new WristbandError(tokenErrorResponse.Error, tokenErrorResponse.ErrorDescription);
+                    throw new InvalidGrantError(tokenErrorResponse.ErrorDescription);
                 }
             }
             catch (JsonException ex)
@@ -132,12 +128,10 @@ internal class WristbandNetworking
     }
 
     /// <summary>
-    /// Retrieves user information from the Wristband platform using the provided access token.
+    /// Implements <see cref="IWristbandNetworking.GetUserinfo"/>.
     /// </summary>
-    /// <param name="accessToken">The access token used to authenticate the request.</param>
-    /// <returns>A <see cref="Task{UserInfo}"/> representing the asynchronous operation. The result contains the user details.</returns>
-    /// <remarks><a href="https://docs.wristband.dev/reference/userinfov1">Wristband UserInfo Endpoint</a></remarks>
-    internal async Task<UserInfo> GetUserinfo(string accessToken)
+    /// <inheritdoc />
+    public async Task<UserInfo> GetUserinfo(string accessToken)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, $"https://{_wristbandApplicationDomain}/api/v1/oauth2/userinfo");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -150,12 +144,10 @@ internal class WristbandNetworking
     }
 
     /// <summary>
-    /// Calls the Wristband Token Endpoint with the refresh token grant type to refresh an expired access token.
+    /// Implements <see cref="IWristbandNetworking.RefreshToken"/>.
     /// </summary>
-    /// <param name="refreshToken">The refresh token used to obtain a new access token.</param>
-    /// <returns>A <see cref="Task{TokenData}"/> representing the asynchronous operation. The result contains the refreshed access token, id token, and refresh token.</returns>
-    /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
-    internal async Task<TokenData> RefreshToken(string refreshToken)
+    /// <inheritdoc />
+    public async Task<TokenData> RefreshToken(string refreshToken)
     {
         var formParams = new Dictionary<string, string>
         {
@@ -205,13 +197,10 @@ internal class WristbandNetworking
     }
 
     /// <summary>
-    /// Calls the Wristband Revoke Token Endpoint to revoke a refresh token.
+    /// Implements <see cref="IWristbandNetworking.RevokeRefreshToken"/>.
     /// </summary>
-    /// <param name="refreshToken">The refresh token to revoke.</param>
-    /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
-    /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
-    // Calls the Wristband Revoke Token Endpoint. See here for more: https://docs.wristband.dev/reference/tokenv1
-    internal async Task RevokeRefreshToken(string refreshToken)
+    /// <inheritdoc />
+    public async Task RevokeRefreshToken(string refreshToken)
     {
         var formParams = new Dictionary<string, string>
         {

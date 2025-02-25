@@ -1,17 +1,9 @@
-using System;
 using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
 
 using Moq;
 using Moq.Protected;
-
-using Xunit;
-
 
 namespace Wristband.AspNet.Auth.Tests
 {
@@ -21,7 +13,7 @@ namespace Wristband.AspNet.Auth.Tests
         private readonly HttpClient _httpClient;
         private readonly WristbandNetworking _wristbandNetworking;
         private readonly string _domain = "your-wristband-domain";
-        private readonly AuthConfig _validAuthConfig = new AuthConfig
+        private readonly WristbandAuthConfig _validAuthConfig = new WristbandAuthConfig
         {
             WristbandApplicationDomain = "your-wristband-domain",
             ClientId = "test-client-id",
@@ -54,10 +46,10 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_WithNullConfig_ThrowsArgumentNullException()
         {
-            var exception = Assert.Throws<System.ArgumentNullException>(() => new WristbandNetworking(null!));
+            var exception = Assert.Throws<ArgumentNullException>(() => new WristbandNetworking(null!));
             Assert.Equal("authConfig", exception.ParamName);
 
-            exception = Assert.Throws<System.ArgumentNullException>(() => new WristbandNetworking(null!, null));
+            exception = Assert.Throws<ArgumentNullException>(() => new WristbandNetworking(null!, null));
             Assert.Equal("authConfig", exception.ParamName);
         }
 
@@ -73,7 +65,7 @@ namespace Wristband.AspNet.Auth.Tests
         [InlineData("domain.com", "client-id", "  ", "The [clientSecret] config must have a value.")]
         public void Constructor_WithInvalidConfig_ThrowsArgumentException(string domain, string clientId, string clientSecret, string expectedMessage)
         {
-            var config = new AuthConfig
+            var config = new WristbandAuthConfig
             {
                 WristbandApplicationDomain = domain,
                 ClientId = clientId,
@@ -158,7 +150,7 @@ namespace Wristband.AspNet.Auth.Tests
         }
 
         [Fact]
-        public async Task GetTokens_InvalidGrant_ThrowsWristbandError()
+        public async Task GetTokens_InvalidGrant_ThrowsInvalidGrantError()
         {
             var code = "invalid-auth-code";
             var redirectUri = "https://app.example.com/callback";
@@ -172,7 +164,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             SetupHttpResponse(HttpStatusCode.BadRequest, JsonSerializer.Serialize(errorResponse));
 
-            var exception = await Assert.ThrowsAsync<WristbandError>(
+            var exception = await Assert.ThrowsAsync<InvalidGrantError>(
                 () => _wristbandNetworking.GetTokens(code, redirectUri, codeVerifier)
             );
 

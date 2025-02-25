@@ -1,17 +1,10 @@
-using System;
-using System.Collections.Generic;
-
-using Wristband.AspNet.Auth;
-
-using Xunit;
-
 namespace Wristband.AspNet.Auth.Tests
 {
     public class WristbandAuthServiceConstructorTests
     {
-        private AuthConfig GetValidAuthConfig()
+        private WristbandAuthConfig GetValidAuthConfig()
         {
-            return new AuthConfig
+            return new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
@@ -22,6 +15,37 @@ namespace Wristband.AspNet.Auth.Tests
                 RootDomain = "example.com",
                 UseTenantSubdomains = false
             };
+        }
+
+        [Fact]
+        public void DefaultConstructor_ShouldCallParameterizedConstructor_WithNullHttpClient()
+        {
+            var config = GetValidAuthConfig();
+            var service = new WristbandAuthService(config);
+
+            Assert.NotNull(service);
+
+            var scopesField = typeof(WristbandAuthService).GetField("mScopes",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var scopes = scopesField?.GetValue(service) as List<string>;
+            Assert.Equal(new List<string> { "openid", "offline_access", "email" }, scopes);
+        }
+
+        [Fact]
+        public void ParameterizedConstructor_ShouldAcceptNullHttpClient()
+        {
+            var config = GetValidAuthConfig();
+            var service = new WristbandAuthService(config, null);
+            Assert.NotNull(service);
+        }
+
+        [Fact]
+        public void ParameterizedConstructor_ShouldAcceptCustomHttpClient()
+        {
+            var config = GetValidAuthConfig();
+            var httpClient = new HttpClient();
+            var service = new WristbandAuthService(config, httpClient);
+            Assert.NotNull(service);
         }
 
         [Fact]

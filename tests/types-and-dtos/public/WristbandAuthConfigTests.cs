@@ -1,16 +1,11 @@
-using System;
-using System.Collections.Generic;
-
-using Xunit;
-
 namespace Wristband.AspNet.Auth.Tests
 {
-    public class AuthConfigTests
+    public class WristbandAuthConfigTests
     {
         [Fact]
         public void DefaultConstructor_ShouldInitializePropertiesWithDefaults()
         {
-            var config = new AuthConfig();
+            var config = new WristbandAuthConfig();
 
             Assert.Null(config.ClientId);
             Assert.Null(config.ClientSecret);
@@ -43,7 +38,7 @@ namespace Wristband.AspNet.Auth.Tests
             var useCustomDomains = true;
             var useTenantSubdomains = true;
 
-            var config = new AuthConfig(
+            var config = new WristbandAuthConfig(
                 clientId,
                 clientSecret,
                 loginStateSecret,
@@ -76,7 +71,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_WithNullValues_ShouldSetPropertiesToNullOrDefaults()
         {
-            var config = new AuthConfig(null, null, null, null, null, null, null, null, null, null, null, null);
+            var config = new WristbandAuthConfig(null, null, null, null, null, null, null, null, null, null, null, null);
 
             Assert.Null(config.ClientId);
             Assert.Null(config.ClientSecret);
@@ -95,7 +90,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Properties_ShouldBeSettableAfterConstruction()
         {
-            var config = new AuthConfig();
+            var config = new WristbandAuthConfig();
 
             config.ClientId = "updated-client-id";
             config.ClientSecret = "updated-client-secret";

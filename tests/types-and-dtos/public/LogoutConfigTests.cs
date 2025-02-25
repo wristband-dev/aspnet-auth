@@ -1,7 +1,3 @@
-using System;
-
-using Xunit;
-
 namespace Wristband.AspNet.Auth.Tests
 {
     public class LogoutConfigTests
