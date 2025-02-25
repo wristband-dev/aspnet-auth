@@ -315,7 +315,7 @@ public class WristbandAuthService : IWristbandAuthService
                 loginState.ReturnUrl);
             return new CallbackResult(CallbackResultType.COMPLETED, callbackData, null);
         }
-        catch (WristbandError)
+        catch (InvalidGrantError)
         {
             // Handle "invalid_grant" errors gracefully
             return new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, null, tenantLoginUrl);
@@ -385,7 +385,7 @@ public class WristbandAuthService : IWristbandAuthService
     /// Implements <see cref="IWristbandAuthService.RefreshTokenIfExpired"/>.
     /// </summary>
     /// <inheritdoc />
-    public async Task<TokenData?> RefreshTokenIfExpired(string? refreshToken, long expiresAt = 0)
+    public async Task<TokenData?> RefreshTokenIfExpired(string refreshToken, long expiresAt)
     {
         if (string.IsNullOrEmpty(refreshToken))
         {

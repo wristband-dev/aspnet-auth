@@ -150,7 +150,7 @@ namespace Wristband.AspNet.Auth.Tests
         }
 
         [Fact]
-        public async Task GetTokens_InvalidGrant_ThrowsWristbandError()
+        public async Task GetTokens_InvalidGrant_ThrowsInvalidGrantError()
         {
             var code = "invalid-auth-code";
             var redirectUri = "https://app.example.com/callback";
@@ -164,7 +164,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             SetupHttpResponse(HttpStatusCode.BadRequest, JsonSerializer.Serialize(errorResponse));
 
-            var exception = await Assert.ThrowsAsync<WristbandError>(
+            var exception = await Assert.ThrowsAsync<InvalidGrantError>(
                 () => _wristbandNetworking.GetTokens(code, redirectUri, codeVerifier)
             );
 

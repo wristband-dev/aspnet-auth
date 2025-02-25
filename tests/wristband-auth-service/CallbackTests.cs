@@ -192,7 +192,7 @@ public class CallbackTests
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()))
-            .ThrowsAsync(new WristbandError("invalid_grant", "Token exchange failed"));
+            .ThrowsAsync(new InvalidGrantError("Token exchange failed"));
 
         var result = await service.Callback(httpContext);
 
@@ -233,7 +233,7 @@ public class CallbackTests
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()))
-            .ThrowsAsync(new WristbandError("invalid_grant", "Token exchange failed"));
+            .ThrowsAsync(new InvalidGrantError("Token exchange failed"));
 
         var result = await service.Callback(httpContext);
 

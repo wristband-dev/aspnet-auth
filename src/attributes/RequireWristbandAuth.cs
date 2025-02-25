@@ -1,5 +1,7 @@
 using System;
 
+namespace Wristband.AspNet.Auth;
+
 /// <summary>
 /// Indicates that the endpoint requires Wristband authentication.
 /// </summary>

@@ -99,7 +99,7 @@ internal class WristbandNetworking : IWristbandNetworking
 
                 if (string.Equals(tokenErrorResponse.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
                 {
-                    throw new WristbandError(tokenErrorResponse.Error, tokenErrorResponse.ErrorDescription);
+                    throw new InvalidGrantError(tokenErrorResponse.ErrorDescription);
                 }
             }
             catch (JsonException ex)

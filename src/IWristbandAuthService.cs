@@ -42,5 +42,5 @@ public interface IWristbandAuthService
     /// <param name="expiresAt">Unix timestamp in milliseconds at which the access token expires.</param>
     /// <returns>A task representing the asynchronous operation, containing the new token data if refreshed, or null if not.</returns>
     /// <exception cref="Exception">Thrown if an error occurs during the token refresh process.</exception>
-    Task<TokenData?> RefreshTokenIfExpired(string? refreshToken, long expiresAt = 0);
+    Task<TokenData?> RefreshTokenIfExpired(string refreshToken, long expiresAt);
 }

@@ -41,7 +41,7 @@ namespace Wristband.AspNet.Auth.Tests
         public async Task RefreshTokenIfExpired_NullRefreshToken_ThrowsArgumentException()
         {
             var exception = await Assert.ThrowsAsync<ArgumentException>(
-                () => _wristbandAuthService.RefreshTokenIfExpired(null, 1));
+                () => _wristbandAuthService.RefreshTokenIfExpired(null!, 1));
 
             Assert.Equal("Refresh token must be a valid string", exception.Message);
         }
