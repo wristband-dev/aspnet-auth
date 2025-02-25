@@ -13,7 +13,7 @@ namespace Wristband.AspNet.Auth.Tests
         private readonly HttpClient _httpClient;
         private readonly WristbandNetworking _wristbandNetworking;
         private readonly string _domain = "your-wristband-domain";
-        private readonly AuthConfig _validAuthConfig = new AuthConfig
+        private readonly WristbandAuthConfig _validAuthConfig = new WristbandAuthConfig
         {
             WristbandApplicationDomain = "your-wristband-domain",
             ClientId = "test-client-id",
@@ -65,7 +65,7 @@ namespace Wristband.AspNet.Auth.Tests
         [InlineData("domain.com", "client-id", "  ", "The [clientSecret] config must have a value.")]
         public void Constructor_WithInvalidConfig_ThrowsArgumentException(string domain, string clientId, string clientSecret, string expectedMessage)
         {
-            var config = new AuthConfig
+            var config = new WristbandAuthConfig
             {
                 WristbandApplicationDomain = domain,
                 ClientId = clientId,

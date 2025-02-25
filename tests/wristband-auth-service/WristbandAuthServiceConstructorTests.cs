@@ -2,9 +2,9 @@ namespace Wristband.AspNet.Auth.Tests
 {
     public class WristbandAuthServiceConstructorTests
     {
-        private AuthConfig GetValidAuthConfig()
+        private WristbandAuthConfig GetValidAuthConfig()
         {
-            return new AuthConfig
+            return new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",

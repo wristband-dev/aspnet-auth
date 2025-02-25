@@ -31,9 +31,9 @@ public class WristbandAuthService : IWristbandAuthService
     /// Initializes a new instance of the <see cref="WristbandAuthService"/> class for production use.
     /// This constructor validates and configures the necessary settings for authentication.
     /// </summary>
-    /// <param name="authConfig">The <see cref="AuthConfig"/> object containing authentication settings.</param>
+    /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> object containing authentication settings.</param>
     /// <exception cref="ArgumentException">Thrown if any required configuration values are missing or invalid.</exception>
-    public WristbandAuthService(AuthConfig authConfig)
+    public WristbandAuthService(WristbandAuthConfig authConfig)
         : this(authConfig, null)
     {
     }
@@ -43,10 +43,10 @@ public class WristbandAuthService : IWristbandAuthService
     /// This constructor validates and configures the necessary settings for authentication.
     /// This constructor is useful for testing, allowing the injection of a custom <see cref="HttpClient"/>.
     /// </summary>
-    /// <param name="authConfig">The <see cref="AuthConfig"/> object containing authentication settings.</param>
+    /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> object containing authentication settings.</param>
     /// <param name="httpClient">Optional custom <see cref="HttpClient"/> to be used for making requests.</param>
     /// <exception cref="ArgumentException">Thrown if any required configuration values are missing or invalid.</exception>
-    public WristbandAuthService(AuthConfig authConfig, HttpClient? httpClient = null)
+    public WristbandAuthService(WristbandAuthConfig authConfig, HttpClient? httpClient = null)
     {
         if (string.IsNullOrEmpty(authConfig.ClientId))
         {
@@ -315,10 +315,9 @@ public class WristbandAuthService : IWristbandAuthService
                 loginState.ReturnUrl);
             return new CallbackResult(CallbackResultType.COMPLETED, callbackData, null);
         }
-        catch (WristbandError ex)
+        catch (WristbandError)
         {
             // Handle "invalid_grant" errors gracefully
-            Console.WriteLine($"Callback error [{ex.Error}] from Token response: {ex.ErrorDescription}");
             return new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, null, tenantLoginUrl);
         }
     }

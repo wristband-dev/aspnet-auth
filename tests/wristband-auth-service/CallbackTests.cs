@@ -12,11 +12,11 @@ public class CallbackTests
 {
     private readonly Mock<ILoginStateHandler> _mockLoginStateHandler;
     private readonly Mock<IWristbandNetworking> _mockNetworking;
-    private readonly AuthConfig _defaultConfig;
+    private readonly WristbandAuthConfig _defaultConfig;
 
     public CallbackTests()
     {
-        _defaultConfig = new AuthConfig
+        _defaultConfig = new WristbandAuthConfig
         {
             ClientId = "test-client",
             ClientSecret = "test-secret",
@@ -30,7 +30,7 @@ public class CallbackTests
         _mockNetworking = new Mock<IWristbandNetworking>();
     }
 
-    private WristbandAuthService SetupWristbandAuthService(AuthConfig authConfig)
+    private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);
 
@@ -210,7 +210,7 @@ public class CallbackTests
     [Fact]
     public async Task Callback_WithTenantSubdomains_ConstructsCorrectRedirectUrl()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,

@@ -12,11 +12,11 @@ public class LoginTests
 {
     private readonly Mock<ILoginStateHandler> _mockLoginStateHandler;
     private readonly Mock<IWristbandNetworking> _mockNetworking;
-    private readonly AuthConfig _defaultConfig;
+    private readonly WristbandAuthConfig _defaultConfig;
 
     public LoginTests()
     {
-        _defaultConfig = new AuthConfig
+        _defaultConfig = new WristbandAuthConfig
         {
             ClientId = "test-client",
             ClientSecret = "test-secret",
@@ -34,7 +34,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithNoTenantInfo_ReturnsAppLevelLoginUrl()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -57,7 +57,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithCustomApplicationLoginPage_UsesCustomUrl()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -78,7 +78,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithTenantCustomDomain_HasHighestPriority()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -104,7 +104,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithTenantSubdomain_TakesPrecedenceOverQueryParam()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -130,7 +130,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithTenantDomainQueryParam_ReturnsCorrectUrl()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -189,7 +189,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithCustomDomains_UsesDotSeparator()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -241,7 +241,7 @@ public class LoginTests
     [Fact]
     public async Task Login_WithAdditionalScopes_IncludesAllScopes()
     {
-        var config = new AuthConfig
+        var config = new WristbandAuthConfig
         {
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
@@ -268,7 +268,7 @@ public class LoginTests
         Assert.Contains("custom_scope", scopes);
     }
 
-    private WristbandAuthService SetupWristbandAuthService(AuthConfig authConfig)
+    private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);
 

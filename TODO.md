@@ -1,1 +1,0 @@
-- Enhance README to match other Wristband SDK documentation

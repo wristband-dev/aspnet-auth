@@ -9,7 +9,7 @@ namespace Wristband.AspNet.Auth.Tests
     public class LogoutTests
     {
         private readonly Mock<IWristbandNetworking> _mockNetworking = new Mock<IWristbandNetworking>();
-        private readonly AuthConfig _defaultConfig = new AuthConfig
+        private readonly WristbandAuthConfig _defaultConfig = new WristbandAuthConfig
         {
             ClientId = "valid-client-id",
             ClientSecret = "valid-client-secret",
@@ -95,7 +95,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public async Task Logout_Should_HandleTenantSubdomains_Correctly()
         {
-            AuthConfig config = new AuthConfig
+            WristbandAuthConfig config = new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
@@ -120,7 +120,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public async Task Logout_Should_HandleCustomTenantDomain()
         {
-            AuthConfig config = new AuthConfig
+            WristbandAuthConfig config = new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
@@ -141,7 +141,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://custom.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
         }
 
-        private WristbandAuthService setupWristbandAuthService(AuthConfig authConfig)
+        private WristbandAuthService setupWristbandAuthService(WristbandAuthConfig authConfig)
         {
             WristbandAuthService wristbandAuthService = new WristbandAuthService(authConfig);
 

@@ -9,11 +9,11 @@ namespace Wristband.AspNet.Auth.Tests
         private readonly Mock<IWristbandNetworking> _mockNetworking = new Mock<IWristbandNetworking>();
 
         private readonly WristbandAuthService _wristbandAuthService;
-        private readonly AuthConfig _authConfig;
+        private readonly WristbandAuthConfig _authConfig;
 
         public RefreshTokenIfExpiredTests()
         {
-            _authConfig = new AuthConfig
+            _authConfig = new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",

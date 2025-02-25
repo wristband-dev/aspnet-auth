@@ -3,17 +3,17 @@ namespace Wristband.AspNet.Auth;
 /// <summary>
 /// This is the primary SDK configuration for integrating Wristband authentication.
 /// </summary>
-public class AuthConfig
+public class WristbandAuthConfig
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="AuthConfig"/> class.
+    /// Initializes a new instance of the <see cref="WristbandAuthConfig"/> class.
     /// </summary>
-    public AuthConfig()
+    public WristbandAuthConfig()
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="AuthConfig"/> class with the specified configuration values.
+    /// Initializes a new instance of the <see cref="WristbandAuthConfig"/> class with the specified configuration values.
     /// </summary>
     /// <param name="clientId">The client ID for the application.</param>
     /// <param name="clientSecret">The client secret for the application.</param>
@@ -27,7 +27,7 @@ public class AuthConfig
     /// <param name="scopes">The scopes required for authentication.</param>
     /// <param name="useCustomDomains">Indicates whether custom domains are used for authentication.</param>
     /// <param name="useTenantSubdomains">Indicates whether tenant subdomains are used for authentication.</param>
-    public AuthConfig(
+    public WristbandAuthConfig(
         string? clientId,
         string? clientSecret,
         string? loginStateSecret,

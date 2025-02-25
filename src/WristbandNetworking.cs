@@ -17,8 +17,8 @@ internal class WristbandNetworking : IWristbandNetworking
     /// <summary>
     /// Initializes a new instance of the <see cref="WristbandNetworking"/> class for production use.
     /// </summary>
-    /// <param name="authConfig">The <see cref="AuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
-    internal WristbandNetworking(AuthConfig authConfig)
+    /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
+    internal WristbandNetworking(WristbandAuthConfig authConfig)
         : this(authConfig, null)
     {
     }
@@ -27,9 +27,9 @@ internal class WristbandNetworking : IWristbandNetworking
     /// Initializes a new instance of the <see cref="WristbandNetworking"/> class.
     /// This constructor is useful for testing, allowing the injection of a custom <see cref="HttpClient"/>.
     /// </summary>
-    /// <param name="authConfig">The <see cref="AuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
+    /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
     /// <param name="httpClient">Optional custom <see cref="HttpClient"/> to be used for making requests.</param>
-    internal WristbandNetworking(AuthConfig authConfig, HttpClient? httpClient = null)
+    internal WristbandNetworking(WristbandAuthConfig authConfig, HttpClient? httpClient = null)
     {
         if (authConfig == null)
         {
