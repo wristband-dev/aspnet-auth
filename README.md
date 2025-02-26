@@ -181,7 +181,7 @@ Alternatively, you can manage secrets through Visual Studio by right-clicking yo
 var builder = WebApplication.CreateBuilder(args);
 ```
 
-You can also explicitly through configuration providers:
+You can also explicitly load secrets through the User Secrets configuration provider:
 ```csharp
 builder.Configuration.AddUserSecrets<Program>();
 ```
@@ -404,7 +404,6 @@ public static class AuthRoutes
       
             // Destroy your application session.
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            await SessionHandler.RemoveWristbandSessionKeys(httpContext);
 
             // Call the Wristband Logout() method and redirect to the resulting URL.
             var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, new LogoutConfig
