@@ -23,7 +23,7 @@
 
 # Wristband Multi-Tenant Authentication SDK for ASP.NET
 
-[![npm package](https://img.shields.io/badge/npm%20i-aspnet--auth-brightgreen)](https://www.npmjs.com/package/@wristband/aspnet-auth)
+[![NuGet](https://img.shields.io/nuget/v/Wristband.AspNet.Auth?label=NuGet)](https://www.nuget.org/packages/Wristband.AspNet.Auth/)
 [![version number](https://img.shields.io/github/v/release/wristband-dev/aspnet-auth?color=green&label=version)](https://github.com/wristband-dev/aspnet-auth/releases)
 [![Actions Status](https://github.com/wristband-dev/aspnet-auth/workflows/Test/badge.svg)](https://github.com/wristband-dev/aspnet-auth/actions)
 [![License](https://img.shields.io/github/license/wristband-dev/aspnet-auth)](https://github.com/wristband-dev/aspnet-auth/blob/main/LICENSE)
@@ -45,6 +45,31 @@ You can learn more about how authentication works in Wristband in our documentat
 
 ---
 
+## Table of Contents
+
+- [Requirements](#requirements)
+- [Installation](#1-installation)
+- [Wristband Configuration](#2-wristband-configuration)
+- [SDK Configuration](#3-sdk-configuration)
+  - [Non-Secret Values Configuration](#non-secret-values-configuration)
+  - [Secret Values Configuration](#secret-values-configuration)
+- [Application Session Configuration](#4-applicaiton-session-configuration)
+- [Auth Endpoints](#5-add-auth-endpoints)
+  - [Login Endpoint](#login-endpoint)
+  - [Callback Endpoint](#callback-endpoint)
+  - [Logout Endpoint](#logout-endpoint)
+  - [Session Endpoint](#session-endpoint)
+- [Guard APIs and Handle Token Refresh](#6-guard-your-non-auth-apis-and-handle-token-refresh)
+  - [App Session Middleware](#app-session-middleware)
+- [Pass Access Token to Downstream APIs](#7-pass-your-access-token-to-downstream-apis)
+- [Wristband Auth Configuration Options](#wristband-auth-configuration-options)
+- [API Reference](#api)
+  - [Login](#taskstring-loginhttpcontext-context-loginconfig-loginconfig)
+  - [Callback](#taskcallbackresult-callbackhttpcontext-context)
+  - [Logout](#taskstring-logouthttpcontext-context-logoutconfig-logoutconfig)
+  - [RefreshTokenIfExpired](#tasktokendata-refreshtokenifexpiredstring-refreshtoken-long-expiresat)
+- [Questions](#questions)
+
 ## Requirements
 
 This SDK is supported for .NET 6, .NET 7, and .NET 8.
@@ -53,12 +78,12 @@ This SDK is supported for .NET 6, .NET 7, and .NET 8.
 
 This SDK is available in [Nuget](https://www.nuget.org/organization/wristband) and can be installed with the `dotnet` CLI:
 ```sh
-dotnet add package Wristband.AspNet.Core
+dotnet add package Wristband.AspNet.Auth
 ```
 
 Or it can also be installed through the Package Manager Console as well:
 ```sh
-Install-Package Wristband.AspNet.Core
+Install-Package Wristband.AspNet.Auth
 ```
 
 You should see the dependency added to your `.csproj` file:
@@ -91,9 +116,6 @@ To enable proper communication between your ASP.NET web application and Wristban
 
 Without subdomains:
 ```json
-// appsettings.json
-
-...
 "WristbandAuthConfig": {
   "ClientId": "--some-identifier--",
   "LoginUrl": "https://example.com/auth/login",
@@ -102,14 +124,10 @@ Without subdomains:
   "UseTenantSubdomains": "false",
   "WristbandApplicationDomain": "sometest-account.us.wristband.dev"
 },
-...
 ```
 
 Using subdomains:
 ```json
-// appsettings.json
-
-...
 "WristbandAuthConfig": {
   "ClientId": "--some-identifier--",
   "LoginUrl": "https://{tenant_domain}.example.com/auth/login",
@@ -119,7 +137,6 @@ Using subdomains:
   "UseTenantSubdomains": "true",
   "WristbandApplicationDomain": "sometest-parent.us.wristband.dev"
 },
-...
 ```
 
 ### Secret Values Configuration
@@ -132,15 +149,9 @@ dotnet user-secrets init
 
 This will add a "UserSecretsId" to your `.csproj` file that looks like this:
 ```xml
-// your-app.csproj
-
-...
-
 <PropertyGroup>
   <UserSecretsId>a-randomly-generated-guid</UserSecretsId>
 </PropertyGroup>
-
-...
 ```
 
 
@@ -152,8 +163,6 @@ dotnet user-secrets set "WristbandAuthConfig:LoginStateSecret" "your-login-state
 
 Alternatively, you can manage secrets through Visual Studio by right-clicking your project and selecting "Manage User Secrets". Then add the following to secrets.json:
 ```json
-// secrets.json
-
 {
   "WristbandAuthConfig": {
     "ClientSecret": "your-client-secret",
@@ -163,7 +172,7 @@ Alternatively, you can manage secrets through Visual Studio by right-clicking yo
 ```
 
 > [!NOTE]
-> Run `openssl rand -base64 32` to create a 32 byte, base-64 encoded secret. LoginStateSecret which will be used to secure cookie contents for login requests to Wristband.
+> Run `openssl rand -base64 32` to create a 32 byte, base-64 encoded secret. LoginStateSecret will be used to secure cookie contents for login requests to Wristband.
 
 3. During development, the secrets will automatically be loaded when you create your WebApplication builder for the following methods:
 - A `secrets.json` in development, or,
@@ -172,7 +181,7 @@ Alternatively, you can manage secrets through Visual Studio by right-clicking yo
 var builder = WebApplication.CreateBuilder(args);
 ```
 
-You can also explicitly through configuration providers:
+You can also explicitly load secrets through the User Secrets configuration provider:
 ```csharp
 builder.Configuration.AddUserSecrets<Program>();
 ```
@@ -276,23 +285,24 @@ using Wristband.AspNet.Auth;
 
 public static class AuthRoutes
 {
+    public static WebApplication MapAuthEndpoints(this WebApplication app)
+    {
+        // Login Endpoint - Route path can be whatever you prefer
+        app.MapGet("/auth/login", async (HttpContext httpContext, IWristbandAuthService wristbandAuth) =>
+        {
+            try {
+                // Call the Wristband Login() method and redirect to the resulting URL.
+                var wristbandAuthorizeUrl = await wristbandAuth.Login(httpContext, null);
+                return Results.Redirect(wristbandAuthorizeUrl);
+            } catch (Exception ex) {
+                return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+            }
+        })
 
-  // Login Endpoint - Route path can be whatever you prefer
-  app.MapGet("/auth/login", async (HttpContext httpContext, IWristbandAuthService wristbandAuth) =>
-  {
-    try {
-      // Call the Wristband Login() method and redirect to the resulting URL.
-      var wristbandAuthorizeUrl = await wristbandAuth.Login(httpContext, null);
-      return Results.Redirect(wristbandAuthorizeUrl);
-    } catch (Exception ex) {
-      return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+        //
+        // Other auth routes...
+        //
     }
-  })
-
-  //
-  // Other auth routes...
-  //
-
 }
 ```
 
@@ -311,61 +321,57 @@ using Wristband.AspNet.Auth;
 public static class AuthRoutes
 {
 
-  ...
+    ...
 
-  // Callback Endpoint - Route path can be whatever you prefer
-  app.MapGet("/auth/callback", async (HttpContext httpContext, IWristbandAuthService wristbandAuth) =>
-  {
-    try
+    // Callback Endpoint - Route path can be whatever you prefer
+    app.MapGet("/auth/callback", async (HttpContext httpContext, IWristbandAuthService wristbandAuth) =>
     {
-      // Call the Wristband Callback() method to get results, token data, and user info.
-      var callbackResult = await wristbandAuth.Callback(httpContext);
+        try
+        {
+            // Call the Wristband Callback() method to get results, token data, and user info.
+            var callbackResult = await wristbandAuth.Callback(httpContext);
 
-      // For some edge cases, the SDK will require a redirect to restart the login flow.
-      if (callbackResult.Result == CallbackResultType.REDIRECT_REQUIRED)
-      {
-        return Results.Redirect(callbackResult.RedirectUrl);
-      }
+            // For some edge cases, the SDK will require a redirect to restart the login flow.
+            if (callbackResult.Result == CallbackResultType.REDIRECT_REQUIRED)
+            {
+                return Results.Redirect(callbackResult.RedirectUrl);
+            }
 
-      // Extract your desired user info.
-      var userinfo = callbackData.Userinfo;
-      var claims = new List<Claim>
-      {
-          new("isAuthenticated", "true"),
-          new("accessToken", callbackData.AccessToken),
-          new("refreshToken", callbackData.RefreshToken ?? string.Empty),
-          // Convert expiration seconds to a Unix timestamp in milliseconds.
-          new("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (callbackData.ExpiresIn * 1000)}"),
-          new("userId", userinfo.TryGetValue("sub", out var userId) ? userId.GetString() : string.Empty),
-          new("email", userinfo.TryGetValue("email", out var email) ? email.GetString() : string.Empty),
-          new("tenantId", userinfo.TryGetValue("tnt_id", out var tenantId) ? tenantId.GetString() : string.Empty),
-          //
-          // Add any user info claims your app needs...
-          //
-      };
-      
-      // Create your application session cookie
-      await context.SignInAsync(
-      	  CookieAuthenticationDefaults.AuthenticationScheme, 
-        		new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
-          new AuthenticationProperties { IsPersistent = true }
-	  );
-      
+            // Extract your desired user info.
+            var userinfo = callbackData.Userinfo;
+            var claims = new List<Claim>
+            {
+                new("isAuthenticated", "true"),
+                new("accessToken", callbackData.AccessToken),
+                new("refreshToken", callbackData.RefreshToken ?? string.Empty),
+                // Convert expiration seconds to a Unix timestamp in milliseconds.
+                new("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (callbackData.ExpiresIn * 1000)}"),
+                new("userId", userinfo.TryGetValue("sub", out var userId) ? userId.GetString() : string.Empty),
+                new("email", userinfo.TryGetValue("email", out var email) ? email.GetString() : string.Empty),
+                new("tenantId", userinfo.TryGetValue("tnt_id", out var tenantId) ? tenantId.GetString() : string.Empty),
+                //
+                // Add any user info claims your app needs...
+                //
+            };
 
-      // For the happy path, send users into your desired app URL!
-      var tenantPostLoginRedirectUrl = $"http://{callbackResult.CallbackData.TenantDomainName}.example.com";
-      return Results.Redirect(tenantPostLoginRedirectUrl);
-    } catch (Exception ex)
-    {
-      return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
-    }
-  })
-  
-  //
-  // Other auth routes...
-  //
-    
-});
+            // Create your application session cookie
+            await context.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme, 
+                    new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+                new AuthenticationProperties { IsPersistent = true });
+
+            // For the happy path, send users into your desired app URL!
+            var tenantPostLoginRedirectUrl = $"http://{callbackResult.CallbackData.TenantDomainName}.example.com";
+            return Results.Redirect(tenantPostLoginRedirectUrl);
+        } catch (Exception ex)
+        {
+            return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+        }
+    })
+    //
+    // Other auth routes...
+    //
+};
 ```
 
 #### [Logout Endpoint](https://docs.wristband.dev/docs/auth-flows-and-diagrams#logout-endpoint-1)
@@ -384,41 +390,38 @@ using Wristband.AspNet.Auth;
 public static class AuthRoutes
 {
 
-  ...
+    ...
 
-  // Logout Endpoint - Route path can be whatever you prefer
-  app.MapGet("/auth/logout", async (HttpContext httpContext, IWristbandAuthService wristbandAuth) =>
-  {
-    try
+    // Logout Endpoint - Route path can be whatever you prefer
+    app.MapGet("/auth/logout", async (HttpContext httpContext, IWristbandAuthService wristbandAuth) =>
     {
-      // Grab necessary session fields for the Logout() function.
-      var refreshToken = SessionHandler.GetRefreshToken(httpContext);
-      var tenantCustomDomain = SessionHandler.GetTenantCustomDomain(httpContext);
-      var tenantDomainName = SessionHandler.GetTenantDomainName(httpContext);
+        try
+        {
+            // Grab necessary session fields for the Logout() function.
+            var refreshToken = SessionHandler.GetRefreshToken(httpContext);
+            var tenantCustomDomain = SessionHandler.GetTenantCustomDomain(httpContext);
+            var tenantDomainName = SessionHandler.GetTenantDomainName(httpContext);
       
-      // Destroy your application session.
-      await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-      await SessionHandler.RemoveWristbandSessionKeys(httpContext);
+            // Destroy your application session.
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
-      // Call the Wristband Logout() method and redirect to the resulting URL.
-      var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, new LogoutConfig
-      {
-        RefreshToken = refreshToken ?? null,
-        TenantCustomDomain = tenantCustomDomain ?? null,
-        TenantDomainName = tenantDomainName ?? null,
-      });
-      return Results.Redirect(wristbandLogoutUrl);
-    }
-    catch (Exception ex)
-    {
-      return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
-    }
-  });
-  
-  //
-  // Other auth routes...
-  //
-
+            // Call the Wristband Logout() method and redirect to the resulting URL.
+            var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, new LogoutConfig
+            {
+                RefreshToken = refreshToken ?? null,
+                TenantCustomDomain = tenantCustomDomain ?? null,
+                TenantDomainName = tenantDomainName ?? null,
+            });
+            return Results.Redirect(wristbandLogoutUrl);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+        }
+    });
+    //
+    // Other auth routes...
+    //
 }
 ```
 
@@ -444,10 +447,10 @@ public static class AuthRoutes
     app.MapGet("/session", (HttpContext httpContext) =>
     {
         var user = httpContext.User;
-        
+
         //
         // You can make other API calls to get additional data for return.
-		//
+        //
 
         return Results.Ok(new 
         { 
@@ -494,7 +497,7 @@ public class AuthMiddleware
             await _next(context);
             return;
         }
-        
+
         // Verify authentication
         if (!await IsAuthenticated(context))
         {
@@ -509,24 +512,23 @@ public class AuthMiddleware
             var tokenData = await wristbandAuth.RefreshTokenIfExpired(refreshToken, expiresAt);
 
             // Update token claims if refresh was necessary
-    		var claims = context.User.Claims;    
-		    if (tokenData != null)
-		    {
-        		claims = claims
-		            .Where(c => !new[] { "accessToken", "refreshToken", "expiresAt" }.Contains(c.Type))
-        		    .Concat(new[]
-            		{
-        		        new Claim("accessToken", tokenData.AccessToken),
-                		new Claim("refreshToken", tokenData.RefreshToken ?? string.Empty),
-		                new Claim("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (tokenData.ExpiresIn * 1000)}")
-        		    });
-    		}
+            var claims = context.User.Claims;    
+            if (tokenData != null)
+            {
+                claims = claims
+                    .Where(c => !new[] { "accessToken", "refreshToken", "expiresAt" }.Contains(c.Type))
+                    .Concat(new[]
+                    {
+                        new Claim("accessToken", tokenData.AccessToken),
+                        new Claim("refreshToken", tokenData.RefreshToken ?? string.Empty),
+                        new Claim("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (tokenData.ExpiresIn * 1000)}")
+                    });
+            }
 
-		    await context.SignInAsync(
-        		CookieAuthenticationDefaults.AuthenticationScheme,
-		        new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
-		        new AuthenticationProperties { IsPersistent = true }
-		    );
+            await context.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+                new AuthenticationProperties { IsPersistent = true });
             await _next(context);
         }
         catch (Exception ex)
@@ -534,13 +536,13 @@ public class AuthMiddleware
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
         }
     }
-    
+
     private async Task<bool> IsAuthenticated(HttpContext context)
     {
         var authResult = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return authResult.Succeeded && 
-               authResult.Principal != null && 
-               context.User.FindFirst("isAuthenticated")?.Value == "true";
+            authResult.Principal != null && 
+            context.User.FindFirst("isAuthenticated")?.Value == "true";
     }
 }
 ```
@@ -569,12 +571,11 @@ public static class ProtectedRoutes
 {
     public static WebApplication MapProtectedRoutes(this WebApplication app)
     {
-        app.MapGet("/protected",
-            (HttpContext httpContext) =>
-            {
-                return Results.Ok(new { Message = "This is a protected route." });
-            })
-            .WithMetadata(new RequireWristbandAuth());
+        app.MapGet("/protected", (HttpContext httpContext) =>
+        {
+            return Results.Ok(new { Message = "This is a protected route." });
+        })
+        .WithMetadata(new RequireWristbandAuth());
 
         return app;
     }
@@ -602,7 +603,7 @@ private static HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, str
     var request = new HttpRequestMessage(method, url);
     var accessToken = context.User.FindFirst("accessToken")?.Value 
         ?? throw new InvalidOperationException("Access token is missing or empty");
-    
+
     request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
     return request;
 }
@@ -614,15 +615,14 @@ app.MapPost("/orders", async (HttpContext context, HttpClient httpClient) =>
     {
         var newOrder = await context.Request.ReadFromJsonAsync<Order>();
         await SaveOrderToDatabase(newOrder);
-        
+
         // Create request with token
         var request = CreateAuthorizedRequest(HttpMethod.Post, "https://api.example.com/email-receipt", context);
         request.Content = JsonContent.Create(newOrder);
-        
+
         // Send the request
         var response = await httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
-        
         return Results.Ok();
     }
     catch (Exception ex)
@@ -646,12 +646,12 @@ builder.Services.AddWristbandAuth(builder.Configuration);
 // Direct Configuration
 builder.Services.AddWristbandAuth(options =>
 {
-  options.ClientId = "direct-client";
-  options.ClientSecret = "direct-secret";
-  options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
-  options.LoginUrl = "https://login.url";
-  options.RedirectUri = "https://redirect.uri";
-  options.WristbandApplicationDomain = "wristband.domain";
+    options.ClientId = "direct-client";
+    options.ClientSecret = "direct-secret";
+    options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
+    options.LoginUrl = "https://login.url";
+    options.RedirectUri = "https://redirect.uri";
+    options.WristbandApplicationDomain = "wristband.domain";
 });
 ```
 
@@ -665,7 +665,7 @@ builder.Services.AddWristbandAuth(options =>
 | LoginUrl | string | Yes | The URL for initiating the login request. |
 | RedirectUri | string | Yes | The redirect URI for callback after authentication. |
 | RootDomain | string | Depends | The root domain for your application. This value only needs to be specified if you use tenant subdomains in your login and redirect URLs. |
-| scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`. |
+| Scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`. |
 | UseCustomDomains | boolean | No | Indicates whether custom domains are used for authentication. |
 | UseTenantSubdomains | boolean | No | Indicates whether tenant subdomains are used for authentication. |
 | WristbandApplicationDomain | string | Yes | The vanity domain of the Wristband application. |
@@ -724,12 +724,12 @@ Your WristbandAuthConfig would look like the following when creating an SDK inst
 ```csharp
 builder.Services.AddWristbandAuth(options =>
 {
-	options.ClientId = "ic6saso5hzdvbnof3bwgccejxy";
+    options.ClientId = "ic6saso5hzdvbnof3bwgccejxy";
     options.ClientSecret = "30e9977124b13037d035be10d727806f";
-	options.LoginStateSecret = "7ffdbecc-ab7d-4134-9307-2dfcc52f7475";
-	options.LoginUrl = "https://yourapp.io/auth/login";
-	options.RedirectUri = "https://yourapp.io/auth/callback";
-	options.WristbandApplicationDomain = "yourapp-yourcompany.us.wristband.dev";
+    options.LoginStateSecret = "7ffdbecc-ab7d-4134-9307-2dfcc52f7475";
+    options.LoginUrl = "https://yourapp.io/auth/login";
+    options.RedirectUri = "https://yourapp.io/auth/callback";
+    options.WristbandApplicationDomain = "yourapp-yourcompany.us.wristband.dev";
 });
 ```
 
@@ -764,9 +764,9 @@ For certain use cases, it may be useful to specify a default tenant domain in th
 ```csharp
 var loginConfig = new LoginConfig
 {
-   DefaultTenantDomainName = "global"
+    DefaultTenantDomainName = "global"
 };
-await wristbandAuth.Login(httpContext, loginConfig);
+var wristbandAuthorizeUrl = await wristbandAuth.Login(httpContext, loginConfig);
 ```
 
 #### Tenant Custom Domain Query Param
@@ -786,9 +786,9 @@ For certain use cases, it may be useful to specify a default tenant custom domai
 ```csharp
 var loginConfig = new LoginConfig
 {
-   DefaultTenantCustomDomain = "mytenant.com"
+    DefaultTenantCustomDomain = "mytenant.com"
 };
-await wristbandAuth.Login(httpContext, loginConfig);
+var wristbandAuthorizeUrl = await wristbandAuth.Login(httpContext, loginConfig);
 ```
 
 The default tenant custom domain takes precedence over all other possible domains else when present except when the `tenant_custom_domain` query parameter exists in the request.

@@ -22,12 +22,12 @@
 
   <PropertyGroup>
     <PackageId>Wristband.AspNet.Auth</PackageId>
-    <Product>Wristband.AspNet.Auth</Product>
+    <Product>Wristband Authentication SDK for ASP.NET</Product>
     <Description>SDK for integrating your ASP.NET web application with Wristband. Handles user authentication and token management.</Description>
     <Copyright>Apitopia, Inc.</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Authors>Wristband</Authors>
-    <PackageTags>wristband;authentication;openid connect;oidc;oauth2;multi tenant</PackageTags>
+    <PackageTags>wristband;authentication;openid connect;oidc;oauth2;multi tenant;multi-tenant;b2b</PackageTags>
     <PackageIcon>WristbandIcon.png</PackageIcon>
     <PackageProjectUrl>https://github.com/wristband-dev/aspnet-auth</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
