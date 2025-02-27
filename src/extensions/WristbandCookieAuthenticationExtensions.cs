@@ -31,11 +31,6 @@ public static class WristbandCookieAuthenticationExtensions
             return Task.CompletedTask;
         };
 
-        options.Events.OnRedirectToAccessDenied = context =>
-        {
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            return Task.CompletedTask;
-        };
         return options;
     }
 }

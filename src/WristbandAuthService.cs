@@ -477,7 +477,7 @@ public class WristbandAuthService : IWristbandAuthService
     {
         if (useTenantSubdomains)
         {
-            var host = context.Request.Host.Value;
+            var host = context.Request.Host.Value ?? string.Empty;
             return ParseTenantSubdomain(host, rootDomain);
         }
 

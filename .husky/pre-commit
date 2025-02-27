@@ -9,5 +9,5 @@ dotnet restore
 dotnet tool restore
 dotnet build --configuration Release --no-restore
 dotnet format --verify-no-changes
-dotnet test --configuration Release --no-restore --no-build --framework net8.0 --verbosity normal
+dotnet test --configuration Release --no-restore --no-build --framework net9.0 --verbosity normal
 dotnet pack --configuration Release --no-restore --no-build
