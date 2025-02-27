@@ -72,7 +72,7 @@ You can learn more about how authentication works in Wristband in our documentat
 
 ## Requirements
 
-This SDK is supported for .NET 6, .NET 7, and .NET 8.
+This SDK is supported for .NET 6, .NET 7, .NET 8, and .NET 9.
 
 ## 1) Installation
 
@@ -255,7 +255,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.SlidingExpiration = true;
         options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
-        // Return 401/403 errors codes to client instead of redirects.
+        // Return 401 errors codes to client instead of redirects.
         options.UseWristbandApiStatusCodes();
     });
 
@@ -341,16 +341,22 @@ public static class AuthRoutes
             var userinfo = callbackData.Userinfo;
             var claims = new List<Claim>
             {
+                // Auth-related claims
                 new("isAuthenticated", "true"),
                 new("accessToken", callbackData.AccessToken),
                 new("refreshToken", callbackData.RefreshToken ?? string.Empty),
                 // Convert expiration seconds to a Unix timestamp in milliseconds.
                 new("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (callbackData.ExpiresIn * 1000)}"),
+
+                // Domain-related claims
+                new("tenantDomainName", callbackData.TenantDomainName),
+                new("tenantCustomDomain", callbackData.TenantCustomDomain ?? string.Empty),
+
+                // Userinfo-related claims
                 new("userId", userinfo.TryGetValue("sub", out var userId) ? userId.GetString() : string.Empty),
-                new("email", userinfo.TryGetValue("email", out var email) ? email.GetString() : string.Empty),
                 new("tenantId", userinfo.TryGetValue("tnt_id", out var tenantId) ? tenantId.GetString() : string.Empty),
                 //
-                // Add any user info claims your app needs...
+                // Add whatever user info claims your app needs...
                 //
             };
 
@@ -398,9 +404,9 @@ public static class AuthRoutes
         try
         {
             // Grab necessary session fields for the Logout() function.
-            var refreshToken = SessionHandler.GetRefreshToken(httpContext);
-            var tenantCustomDomain = SessionHandler.GetTenantCustomDomain(httpContext);
-            var tenantDomainName = SessionHandler.GetTenantDomainName(httpContext);
+            var refreshToken = context.User.FindFirst("refreshToken")?.Value ?? string.Empty;
+            var tenantCustomDomain = context.User.FindFirst("tenantCustomDomain")?.Value ?? string.Empty;
+            var tenantDomainName = context.User.FindFirst("tenantDomainName")?.Value ?? string.Empty;
       
             // Destroy your application session.
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);

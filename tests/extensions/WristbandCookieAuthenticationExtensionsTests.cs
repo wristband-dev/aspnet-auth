@@ -29,28 +29,6 @@ public class WristbandCookieAuthenticationExtensionsTests
     }
 
     [Fact]
-    public async Task UseWristbandApiStatusCodes_OnRedirectToAccessDenied_Returns403()
-    {
-        // Arrange
-        var options = new CookieAuthenticationOptions();
-        options.UseWristbandApiStatusCodes();
-
-        var context = new RedirectContext<CookieAuthenticationOptions>(
-            new DefaultHttpContext(),
-            new AuthenticationScheme("Cookies", "Cookies", typeof(CookieAuthenticationHandler)),
-            options,
-            new AuthenticationProperties(),
-            "/"
-        );
-
-        // Act
-        await options.Events.OnRedirectToAccessDenied(context);
-
-        // Assert
-        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
-    }
-
-    [Fact]
     public void UseWristbandApiStatusCodes_ReturnsOptions_ForChaining()
     {
         // Arrange
