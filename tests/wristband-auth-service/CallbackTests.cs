@@ -11,7 +11,7 @@ namespace Wristband.AspNet.Auth.Tests;
 public class CallbackTests
 {
     private readonly Mock<ILoginStateHandler> _mockLoginStateHandler;
-    private readonly Mock<IWristbandNetworking> _mockNetworking;
+    private readonly Mock<IWristbandApiClient> _mockApiClient;
     private readonly WristbandAuthConfig _defaultConfig;
 
     public CallbackTests()
@@ -27,17 +27,17 @@ public class CallbackTests
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
-        _mockNetworking = new Mock<IWristbandNetworking>();
+        _mockApiClient = new Mock<IWristbandApiClient>();
     }
 
     private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);
 
-        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandNetworking", BindingFlags.NonPublic | BindingFlags.Instance);
+        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         if (fieldInfo != null)
         {
-            fieldInfo.SetValue(wristbandAuthService, _mockNetworking.Object);
+            fieldInfo.SetValue(wristbandAuthService, _mockApiClient.Object);
         }
 
         var loginHandlerField = typeof(WristbandAuthService).GetField("mLoginStateHandler", BindingFlags.NonPublic | BindingFlags.Instance);
@@ -147,7 +147,7 @@ public class CallbackTests
             "state=teststate&code=testcode&tenant_domain=tenant1");
 
         SetupLoginStateMock("teststate", "verifier123");
-        SetupNetworkingMock();
+        SetupApiClientMock();
 
         var result = await service.Callback(httpContext);
 
@@ -168,7 +168,7 @@ public class CallbackTests
             $"state=teststate&code=testcode&tenant_domain=tenant1&tenant_custom_domain={customDomain}");
 
         SetupLoginStateMock("teststate", "verifier123");
-        SetupNetworkingMock();
+        SetupApiClientMock();
 
         var result = await service.Callback(httpContext);
 
@@ -187,7 +187,7 @@ public class CallbackTests
 
         SetupLoginStateMock("teststate", "verifier123");
 
-        _mockNetworking
+        _mockApiClient
             .Setup(x => x.GetTokens(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
@@ -200,7 +200,7 @@ public class CallbackTests
         Assert.Equal(CallbackData.Empty, result.CallbackData);
         Assert.Equal($"{_defaultConfig.LoginUrl}?tenant_domain=tenant1", result.RedirectUrl);
 
-        _mockNetworking.Verify(x => x.GetTokens(
+        _mockApiClient.Verify(x => x.GetTokens(
             "testcode",
             _defaultConfig.RedirectUri!,
             "verifier123"
@@ -228,7 +228,7 @@ public class CallbackTests
 
         SetupLoginStateMock("teststate", "verifier123");
 
-        _mockNetworking
+        _mockApiClient
             .Setup(x => x.GetTokens(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
@@ -266,7 +266,7 @@ public class CallbackTests
             .Returns(loginState);
     }
 
-    private void SetupNetworkingMock()
+    private void SetupApiClientMock()
     {
         var tokenResponse = new TokenResponse
         {
@@ -285,14 +285,14 @@ public class CallbackTests
         });
         var userInfo = new UserInfo(jsonString);
 
-        _mockNetworking
+        _mockApiClient
             .Setup(x => x.GetTokens(
                 It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<string>()))
             .Returns(Task.FromResult(tokenResponse));
 
-        _mockNetworking
+        _mockApiClient
             .Setup(x => x.GetUserinfo(It.IsAny<string>()))
             .Returns(Task.FromResult(userInfo));
     }

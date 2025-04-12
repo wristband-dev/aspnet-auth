@@ -13,7 +13,7 @@ public class WristbandAuthService : IWristbandAuthService
     private const int TokenRefreshRetryAttempts = 3;
     private const int DelayBetweenRefreshAttempts = 100; // 100ms
 
-    private readonly IWristbandNetworking mWristbandNetworking;
+    private readonly IWristbandApiClient mWristbandApiClient;
     private readonly ILoginStateHandler mLoginStateHandler;
     private readonly string mClientId;
     private readonly string mCustomApplicationLoginPageUrl;
@@ -44,9 +44,9 @@ public class WristbandAuthService : IWristbandAuthService
     /// This constructor is useful for testing, allowing the injection of a custom <see cref="HttpClient"/>.
     /// </summary>
     /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> object containing authentication settings.</param>
-    /// <param name="httpClient">Optional custom <see cref="HttpClient"/> to be used for making requests.</param>
+    /// <param name="httpClientFactory">Optional external HTTP client factory. If not provided, an internal factory will be used.</param>
     /// <exception cref="ArgumentException">Thrown if any required configuration values are missing or invalid.</exception>
-    public WristbandAuthService(WristbandAuthConfig authConfig, HttpClient? httpClient = null)
+    public WristbandAuthService(WristbandAuthConfig authConfig, IHttpClientFactory? httpClientFactory = null)
     {
         if (string.IsNullOrEmpty(authConfig.ClientId))
         {
@@ -108,7 +108,8 @@ public class WristbandAuthService : IWristbandAuthService
             }
         }
 
-        mWristbandNetworking = httpClient != null ? new WristbandNetworking(authConfig, httpClient) : new WristbandNetworking(authConfig);
+        // Create a client using the factory - validation happens inside the factory
+        mWristbandApiClient = new WristbandApiClient(authConfig, httpClientFactory);
         mLoginStateHandler = new LoginStateHandler();
 
         mClientId = authConfig.ClientId;
@@ -301,8 +302,8 @@ public class WristbandAuthService : IWristbandAuthService
 
         try
         {
-            var tokenResponse = await mWristbandNetworking.GetTokens(code, loginState.RedirectUri, loginState.CodeVerifier);
-            var userInfo = await mWristbandNetworking.GetUserinfo(tokenResponse.AccessToken);
+            var tokenResponse = await mWristbandApiClient.GetTokens(code, loginState.RedirectUri, loginState.CodeVerifier);
+            var userInfo = await mWristbandApiClient.GetUserinfo(tokenResponse.AccessToken);
             var callbackData = new CallbackData(
                 tokenResponse?.AccessToken ?? string.Empty,
                 tokenResponse?.ExpiresIn ?? 0,
@@ -338,7 +339,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         if (!string.IsNullOrEmpty(logoutConfig.RefreshToken))
         {
-            await mWristbandNetworking.RevokeRefreshToken(logoutConfig.RefreshToken);
+            await mWristbandApiClient.RevokeRefreshToken(logoutConfig.RefreshToken);
         }
 
         // The client ID is always required by the Wristband Logout Endpoint.
@@ -407,7 +408,7 @@ public class WristbandAuthService : IWristbandAuthService
         {
             try
             {
-                var tokenResponse = await mWristbandNetworking.RefreshToken(refreshToken);
+                var tokenResponse = await mWristbandApiClient.RefreshToken(refreshToken);
                 return tokenResponse;
             }
             catch (WristbandError ex)

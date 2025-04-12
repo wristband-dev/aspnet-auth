@@ -8,7 +8,7 @@ namespace Wristband.AspNet.Auth.Tests
 {
     public class LogoutTests
     {
-        private readonly Mock<IWristbandNetworking> _mockNetworking = new Mock<IWristbandNetworking>();
+        private readonly Mock<IWristbandApiClient> _mockApiClient = new Mock<IWristbandApiClient>();
         private readonly WristbandAuthConfig _defaultConfig = new WristbandAuthConfig
         {
             ClientId = "valid-client-id",
@@ -33,7 +33,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, null);
 
-            _mockNetworking.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
+            _mockApiClient.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
 
             Assert.Equal("no-store", httpContext.Response.Headers["Cache-Control"]);
             Assert.Equal("no-cache", httpContext.Response.Headers["Pragma"]);
@@ -47,13 +47,13 @@ namespace Wristband.AspNet.Auth.Tests
             HttpContext httpContext = TestUtils.setupHttpContext("tenant.example.com");
             LogoutConfig logoutConfig = new LogoutConfig { RefreshToken = "valid-refresh-token", TenantDomainName = "tenant" };
 
-            _mockNetworking
+            _mockApiClient
                 .Setup(m => m.RefreshToken("valid-refresh-token"))
                 .Verifiable();
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            _mockNetworking.Verify(m => m.RevokeRefreshToken("valid-refresh-token"), Times.Once);
+            _mockApiClient.Verify(m => m.RevokeRefreshToken("valid-refresh-token"), Times.Once);
 
             Assert.Equal("no-store", httpContext.Response.Headers["Cache-Control"]);
             Assert.Equal("no-cache", httpContext.Response.Headers["Pragma"]);
@@ -69,7 +69,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            _mockNetworking.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
+            _mockApiClient.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
 
             Assert.Equal("no-store", httpContext.Response.Headers["Cache-Control"]);
             Assert.Equal("no-cache", httpContext.Response.Headers["Pragma"]);
@@ -85,7 +85,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            _mockNetworking.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
+            _mockApiClient.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
 
             Assert.Equal("no-store", httpContext.Response.Headers["Cache-Control"]);
             Assert.Equal("no-cache", httpContext.Response.Headers["Pragma"]);
@@ -112,7 +112,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            _mockNetworking.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
+            _mockApiClient.Verify(m => m.RevokeRefreshToken(It.IsAny<string>()), Times.Never);
 
             Assert.Equal("https://tenant-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
         }
@@ -145,11 +145,11 @@ namespace Wristband.AspNet.Auth.Tests
         {
             WristbandAuthService wristbandAuthService = new WristbandAuthService(authConfig);
 
-            // Use reflection to inject the mock networking object into the service
-            var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandNetworking", BindingFlags.NonPublic | BindingFlags.Instance);
-            if (fieldInfo != null && _mockNetworking != null)
+            // Use reflection to inject the mock API Client object into the service
+            var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+            if (fieldInfo != null && _mockApiClient != null)
             {
-                fieldInfo.SetValue(wristbandAuthService, _mockNetworking.Object);
+                fieldInfo.SetValue(wristbandAuthService, _mockApiClient.Object);
             }
 
             return wristbandAuthService;

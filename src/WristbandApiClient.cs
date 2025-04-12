@@ -3,33 +3,42 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+using Microsoft.Extensions.DependencyInjection;
+
 namespace Wristband.AspNet.Auth;
 
 /// <summary>
 /// Contains all code for making REST API calls to the Wristband platform.
 /// </summary>
-internal class WristbandNetworking : IWristbandNetworking
+internal class WristbandApiClient : IWristbandApiClient
 {
+    // Default timeout for HTTP requests in seconds
+    private const int DefaultTimeoutSeconds = 30;
+
+    // Lazy-initialized HTTP client factory instance
+    private static readonly Lazy<IHttpClientFactory> _internalFactory = new Lazy<IHttpClientFactory>(() =>
+        CreateInternalFactory());
+
     private readonly AuthenticationHeaderValue _basicAuthHeader;
     private readonly HttpClient _httpClient;
     private readonly string _wristbandApplicationDomain;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WristbandNetworking"/> class for production use.
+    /// Initializes a new instance of the <see cref="WristbandApiClient"/> class for production use.
     /// </summary>
     /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
-    internal WristbandNetworking(WristbandAuthConfig authConfig)
+    internal WristbandApiClient(WristbandAuthConfig authConfig)
         : this(authConfig, null)
     {
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="WristbandNetworking"/> class.
+    /// Initializes a new instance of the <see cref="WristbandApiClient"/> class.
     /// This constructor is useful for testing, allowing the injection of a custom <see cref="HttpClient"/>.
     /// </summary>
     /// <param name="authConfig">The <see cref="WristbandAuthConfig"/> containing the necessary credentials and domain for the Wristband application.</param>
-    /// <param name="httpClient">Optional custom <see cref="HttpClient"/> to be used for making requests.</param>
-    internal WristbandNetworking(WristbandAuthConfig authConfig, HttpClient? httpClient = null)
+    /// <param name="externalFactory">Optional external HTTP client factory. If not provided, an internal factory will be used.</param>
+    internal WristbandApiClient(WristbandAuthConfig authConfig, IHttpClientFactory? externalFactory = null)
     {
         if (authConfig == null)
         {
@@ -56,14 +65,13 @@ internal class WristbandNetworking : IWristbandNetworking
             "Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{authConfig.ClientId}:{authConfig.ClientSecret}")));
 
-        _httpClient = httpClient ?? new HttpClient()
-        {
-            Timeout = TimeSpan.FromSeconds(30),
-        };
+        // Use the provided factory, or fall back to internal one
+        var factory = externalFactory ?? _internalFactory.Value;
+        _httpClient = factory.CreateClient("WristbandAuth");
     }
 
     /// <summary>
-    /// Implements <see cref="IWristbandNetworking.GetTokens"/>.
+    /// Implements <see cref="IWristbandApiClient.GetTokens"/>.
     /// </summary>
     /// <inheritdoc />
     public async Task<TokenResponse> GetTokens(string code, string redirectUri, string codeVerifier)
@@ -128,7 +136,7 @@ internal class WristbandNetworking : IWristbandNetworking
     }
 
     /// <summary>
-    /// Implements <see cref="IWristbandNetworking.GetUserinfo"/>.
+    /// Implements <see cref="IWristbandApiClient.GetUserinfo"/>.
     /// </summary>
     /// <inheritdoc />
     public async Task<UserInfo> GetUserinfo(string accessToken)
@@ -144,7 +152,7 @@ internal class WristbandNetworking : IWristbandNetworking
     }
 
     /// <summary>
-    /// Implements <see cref="IWristbandNetworking.RefreshToken"/>.
+    /// Implements <see cref="IWristbandApiClient.RefreshToken"/>.
     /// </summary>
     /// <inheritdoc />
     public async Task<TokenData> RefreshToken(string refreshToken)
@@ -197,7 +205,7 @@ internal class WristbandNetworking : IWristbandNetworking
     }
 
     /// <summary>
-    /// Implements <see cref="IWristbandNetworking.RevokeRefreshToken"/>.
+    /// Implements <see cref="IWristbandApiClient.RevokeRefreshToken"/>.
     /// </summary>
     /// <inheritdoc />
     public async Task RevokeRefreshToken(string refreshToken)
@@ -224,5 +232,21 @@ internal class WristbandNetworking : IWristbandNetworking
             // No need to block logout execution if revoking fails
             Console.Error.WriteLine($"Failed to refresh token due to: {ex.Message}\nStack Trace: {ex.StackTrace}");
         }
+    }
+
+    /// <summary>
+    /// Creates an internal HTTP client factory for API requests.
+    /// This allows the class to create and configure HTTP clients without external dependencies.
+    /// </summary>
+    /// <returns>An HTTP client factory configured for Wristband API requests.</returns>
+    private static IHttpClientFactory CreateInternalFactory()
+    {
+        var services = new ServiceCollection();
+        services.AddHttpClient("WristbandAuth", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(DefaultTimeoutSeconds);
+        });
+        var serviceProvider = services.BuildServiceProvider();
+        return serviceProvider.GetRequiredService<IHttpClientFactory>();
     }
 }

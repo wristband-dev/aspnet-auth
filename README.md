@@ -154,7 +154,6 @@ This will add a "UserSecretsId" to your `.csproj` file that looks like this:
 </PropertyGroup>
 ```
 
-
 2. Set your secrets using the CLI:
 ```sh
 dotnet user-secrets set "WristbandAuthConfig:ClientSecret" "your-client-secret"
@@ -202,17 +201,30 @@ builder.Configuration.AddAzureKeyVault(
 > User secrets are for development only. For production, use environment variables or your platform's secure configuration management system.
 
 
-4. Enable authentication middleware, and add the SDK's WristbandAuthenticationService in your `Program.cs` file. The SDK supports two configuration approaches:
+4. Enable authentication middleware, and add the SDK's WristbandAuthenticationService in your `Program.cs` file.
 
-**Via configuration section (recommended for production)...**
+There are two configuration approaches to registering the M2M auth SDK:
+
+**Default Singleton Service**
+
+A default singleton service in C# is ideal when you only need one shared instance of a service throughout your server, with no variations in behavior or configuration.
+
 ```csharp
 // Program.cs
 using Wristband.AspNet.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register Wristband authentication configuration and inject WristbandAuthService.
-builder.Services.AddWristbandAuth(builder.Configuration);
+builder.Services.AddWristbandAuth(options =>
+{
+  var authConfig = builder.Configuration.GetSection("WristbandAuthConfig");
+  options.ClientId = authConfig["ClientId"];
+  options.ClientSecret = authConfig["ClientSecret"];
+  options.LoginStateSecret = authConfig["LoginStateSecret"];
+  options.LoginUrl = authConfig["LoginUrl"];
+  options.RedirectUri = authConfig["RedirectUri"];
+  options.WristbandApplicationDomain = authConfig["WristbandApplicationDomain"];
+});
 
 //
 // Other middleware and routes...
@@ -221,19 +233,49 @@ builder.Services.AddWristbandAuth(builder.Configuration);
 ...
 ```
 
-**... or via direct configuration (useful for development, testing, or when configuration values need to be computed at runtime):**
+**Named Services**
+
+Named services (or multiple registered instances using different OAuth2 Clients) allow you to configure and use multiple clients in the same server.
+
+You can accomodate this pattern in your `appsettings.json` by structuring similar to the following:
+
+```json
+{
+  "WristbandAuthConfig": {
+    "auth01": {
+      "ClientId": "--some-identifier--",
+      // ...
+    },
+    "auth02": {
+      "ClientId": "--another-identifier--",
+      // ...
+    }
+  },
+}
+```
+
+Then in `Program.cs`, you can register the different Backend Server OAuth2 clients as follows:
+
 ```csharp
 // Program.cs
-builder.Services.AddWristbandAuth(options =>
+using Wristband.AspNet.Auth;
+
+builder.Services.AddWristbandM2MAuth("auth01", options =>
 {
-  options.ClientId = "direct-client";
-  options.ClientSecret = "direct-secret";
-  options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
-  options.LoginUrl = "https://login.url";
-  options.RedirectUri = "https://redirect.uri";
-  options.WristbandApplicationDomain = "wristband.domain";
+    var auth01Config = builder.Configuration.GetSection("WristbandAuthConfig:auth01");
+    options.ClientId = auth01Config["ClientId"];
+    // ...
 });
+builder.Services.AddWristbandM2MAuth("auth02", options =>
+{
+    var auth02Config = builder.Configuration.GetSection("WristbandAuthConfig:auth02");
+    options.ClientId = auth02Config["ClientId"];
+    // ...
+});
+
+...
 ```
+
 
 ## 4) Applicaiton Session Configuration
 
@@ -275,6 +317,8 @@ There are <ins>three core API endpoints</ins> your C# server should expose to fa
 
 The goal of the Login Endpoint is to initiate an auth request by redirecting to the [Wristband Authorization Endpoint](https://docs.wristband.dev/reference/authorizev1). It will store any state tied to the auth request in a Login State Cookie, which will later be used by the Callback Endpoint. The frontend of your application should redirect to this endpoint when users need to log in to your application.
 
+
+**Default Singleton Service**
 ```csharp
 // auth-routes.cs
 using Microsoft.AspNetCore.Authentication;
@@ -306,10 +350,7 @@ public static class AuthRoutes
 }
 ```
 
-#### [Callback Endpoint](https://docs.wristband.dev/docs/auth-flows-and-diagrams#callback-endpoint)
-
-The goal of the Callback Endpoint is to receive incoming calls from Wristband after the user has authenticated and ensure that the Login State cookie contains all auth request state in order to complete the Login Workflow. From there, it will call the [Wristband Token Endpoint](https://docs.wristband.dev/reference/tokenv1) to fetch necessary JWTs, call the [Wristband Userinfo Endpoint](https://docs.wristband.dev/reference/userinfov1) to get the user's data, and create a session for the application containing the JWTs and user data.
-
+**Named Services**
 ```csharp
 // auth-routes.cs
 using Microsoft.AspNetCore.Authentication;
@@ -320,7 +361,43 @@ using Wristband.AspNet.Auth;
 
 public static class AuthRoutes
 {
+    public static WebApplication MapAuthEndpoints(this WebApplication app)
+    {
+        // Login Endpoint - Route path can be whatever you prefer
+        app.MapGet("/auth/login", async (HttpContext httpContext, WristbandAuthServiceFactory authFactory) =>
+        {
+            try {
+                // Call the Wristband Login() method and redirect to the resulting URL.
+                var wristbandAuth = authFactory.GetService("auth01");
+                var wristbandAuthorizeUrl = await wristbandAuth.Login(httpContext, null);
+                return Results.Redirect(wristbandAuthorizeUrl);
+            } catch (Exception ex) {
+                return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+            }
+        })
 
+        //
+        // Other auth routes...
+        //
+    }
+}
+```
+
+#### [Callback Endpoint](https://docs.wristband.dev/docs/auth-flows-and-diagrams#callback-endpoint)
+
+The goal of the Callback Endpoint is to receive incoming calls from Wristband after the user has authenticated and ensure that the Login State cookie contains all auth request state in order to complete the Login Workflow. From there, it will call the [Wristband Token Endpoint](https://docs.wristband.dev/reference/tokenv1) to fetch necessary JWTs, call the [Wristband Userinfo Endpoint](https://docs.wristband.dev/reference/userinfov1) to get the user's data, and create a session for the application containing the JWTs and user data.
+
+**Default Singleton Service**
+```csharp
+// auth-routes.cs
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Wristband.AspNet.Auth;
+
+public static class AuthRoutes
+{
     ...
 
     // Callback Endpoint - Route path can be whatever you prefer
@@ -380,11 +457,7 @@ public static class AuthRoutes
 };
 ```
 
-#### [Logout Endpoint](https://docs.wristband.dev/docs/auth-flows-and-diagrams#logout-endpoint-1)
-
-The goal of the Logout Endpoint is to destroy the application's session that was established during the Callback Endpoint execution. If refresh tokens were requested during the Login Workflow, then a call to the [Wristband Revoke Token Endpoint](https://docs.wristband.dev/reference/revokev1) will occur. It then will redirect to the [Wristband Logout Endpoint](https://docs.wristband.dev/reference/logoutv1) in order to destroy the user's authentication session within the Wristband platform. From there, Wristband will send the user to the Tenant-Level Login Page (unless configured otherwise).
-
-
+**Named Services**
 ```csharp
 // auth-routes.cs
 using Microsoft.AspNetCore.Authentication;
@@ -395,7 +468,81 @@ using Wristband.AspNet.Auth;
 
 public static class AuthRoutes
 {
+    ...
 
+    // Callback Endpoint - Route path can be whatever you prefer
+    app.MapGet("/auth/callback", async (HttpContext httpContext, WristbandAuthServiceFactory authFactory) =>
+    {
+        try
+        {
+            // Call the Wristband Callback() method to get results, token data, and user info.
+            var wristbandAuth = authFactory.GetService("auth01");
+            var callbackResult = await wristbandAuth.Callback(httpContext);
+
+            // For some edge cases, the SDK will require a redirect to restart the login flow.
+            if (callbackResult.Result == CallbackResultType.REDIRECT_REQUIRED)
+            {
+                return Results.Redirect(callbackResult.RedirectUrl);
+            }
+
+            // Extract your desired user info.
+            var userinfo = callbackData.Userinfo;
+            var claims = new List<Claim>
+            {
+                // Auth-related claims
+                new("isAuthenticated", "true"),
+                new("accessToken", callbackData.AccessToken),
+                new("refreshToken", callbackData.RefreshToken ?? string.Empty),
+                // Convert expiration seconds to a Unix timestamp in milliseconds.
+                new("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (callbackData.ExpiresIn * 1000)}"),
+
+                // Domain-related claims
+                new("tenantDomainName", callbackData.TenantDomainName),
+                new("tenantCustomDomain", callbackData.TenantCustomDomain ?? string.Empty),
+
+                // Userinfo-related claims
+                new("userId", userinfo.TryGetValue("sub", out var userId) ? userId.GetString() : string.Empty),
+                new("tenantId", userinfo.TryGetValue("tnt_id", out var tenantId) ? tenantId.GetString() : string.Empty),
+                //
+                // Add whatever user info claims your app needs...
+                //
+            };
+
+            // Create your application session cookie
+            await context.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme, 
+                    new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+                new AuthenticationProperties { IsPersistent = true });
+
+            // For the happy path, send users into your desired app URL!
+            var tenantPostLoginRedirectUrl = $"http://{callbackResult.CallbackData.TenantDomainName}.example.com";
+            return Results.Redirect(tenantPostLoginRedirectUrl);
+        } catch (Exception ex)
+        {
+            return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+        }
+    })
+    //
+    // Other auth routes...
+    //
+};
+```
+
+#### [Logout Endpoint](https://docs.wristband.dev/docs/auth-flows-and-diagrams#logout-endpoint-1)
+
+The goal of the Logout Endpoint is to destroy the application's session that was established during the Callback Endpoint execution. If refresh tokens were requested during the Login Workflow, then a call to the [Wristband Revoke Token Endpoint](https://docs.wristband.dev/reference/revokev1) will occur. It then will redirect to the [Wristband Logout Endpoint](https://docs.wristband.dev/reference/logoutv1) in order to destroy the user's authentication session within the Wristband platform. From there, Wristband will send the user to the Tenant-Level Login Page (unless configured otherwise).
+
+**Default Singleton Service**
+```csharp
+// auth-routes.cs
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Wristband.AspNet.Auth;
+
+public static class AuthRoutes
+{
     ...
 
     // Logout Endpoint - Route path can be whatever you prefer
@@ -412,6 +559,53 @@ public static class AuthRoutes
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
             // Call the Wristband Logout() method and redirect to the resulting URL.
+            var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, new LogoutConfig
+            {
+                RefreshToken = refreshToken ?? null,
+                TenantCustomDomain = tenantCustomDomain ?? null,
+                TenantDomainName = tenantDomainName ?? null,
+            });
+            return Results.Redirect(wristbandLogoutUrl);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(detail: $"Unexpected error: {ex.Message}", statusCode: 500);
+        }
+    });
+    //
+    // Other auth routes...
+    //
+}
+```
+
+**Named Services**
+```csharp
+// auth-routes.cs
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Wristband.AspNet.Auth;
+
+public static class AuthRoutes
+{
+    ...
+
+    // Logout Endpoint - Route path can be whatever you prefer
+    app.MapGet("/auth/logout", async (HttpContext httpContext, WristbandAuthServiceFactory authFactory) =>
+    {
+        try
+        {
+            // Grab necessary session fields for the Logout() function.
+            var refreshToken = context.User.FindFirst("refreshToken")?.Value ?? string.Empty;
+            var tenantCustomDomain = context.User.FindFirst("tenantCustomDomain")?.Value ?? string.Empty;
+            var tenantDomainName = context.User.FindFirst("tenantDomainName")?.Value ?? string.Empty;
+      
+            // Destroy your application session.
+            await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+
+            // Call the Wristband Logout() method and redirect to the resulting URL.
+            var wristbandAuth = authFactory.GetService("auth01");
             var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, new LogoutConfig
             {
                 RefreshToken = refreshToken ?? null,
@@ -482,7 +676,7 @@ public static class AuthRoutes
 
 Create a middleware somewhere in your project to check that your session is still valid. It must check if the access token is expired and perform a token refresh if necessary. The Wristband SDK will make 3 attempts to refresh the token and return the latest JWTs to your server.
 
-
+**Default Singleton Service**
 ```csharp
 // auth-middleware.cs
 using Microsoft.AspNetCore.Http;
@@ -515,6 +709,79 @@ public class AuthMiddleware
         {
             var refreshToken = context.User.FindFirst("refreshToken")?.Value ?? string.Empty;
             var expiresAt = long.TryParse(context.User.FindFirst("expiresAt")?.Value, out var exp) ? exp : 0;
+            var tokenData = await wristbandAuth.RefreshTokenIfExpired(refreshToken, expiresAt);
+
+            // Update token claims if refresh was necessary
+            var claims = context.User.Claims;    
+            if (tokenData != null)
+            {
+                claims = claims
+                    .Where(c => !new[] { "accessToken", "refreshToken", "expiresAt" }.Contains(c.Type))
+                    .Concat(new[]
+                    {
+                        new Claim("accessToken", tokenData.AccessToken),
+                        new Claim("refreshToken", tokenData.RefreshToken ?? string.Empty),
+                        new Claim("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (tokenData.ExpiresIn * 1000)}")
+                    });
+            }
+
+            await context.SignInAsync(
+                CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)),
+                new AuthenticationProperties { IsPersistent = true });
+            await _next(context);
+        }
+        catch (Exception ex)
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        }
+    }
+
+    private async Task<bool> IsAuthenticated(HttpContext context)
+    {
+        var authResult = await context.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        return authResult.Succeeded && 
+            authResult.Principal != null && 
+            context.User.FindFirst("isAuthenticated")?.Value == "true";
+    }
+}
+```
+
+**Named Services**
+```csharp
+// auth-middleware.cs
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Wristband.AspNet.Auth;
+
+public class AuthMiddleware
+{
+    private readonly RequestDelegate _next;
+    public AuthMiddleware(RequestDelegate next) => _next = next;
+
+    public async Task InvokeAsync(HttpContext context, WristbandAuthServiceFactory authFactory)
+    {
+        // Skip authentication for endpoints without the RequireWristbandAuth attribute
+        if (context.GetEndpoint()?.Metadata.GetMetadata<RequireWristbandAuthAttribute>() == null)
+        {
+            await _next(context);
+            return;
+        }
+
+        // Verify authentication
+        if (!await IsAuthenticated(context))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return;
+        }
+
+        try
+        {
+            var refreshToken = context.User.FindFirst("refreshToken")?.Value ?? string.Empty;
+            var expiresAt = long.TryParse(context.User.FindFirst("expiresAt")?.Value, out var exp) ? exp : 0;
+
+            var wristbandAuth = authFactory.GetService("auth01");
             var tokenData = await wristbandAuth.RefreshTokenIfExpired(refreshToken, expiresAt);
 
             // Update token claims if refresh was necessary
@@ -641,14 +908,9 @@ app.MapPost("/orders", async (HttpContext context, HttpClient httpClient) =>
 
 ## Wristband Auth Configuration Options
 
-The `AddWristbandAuth()` extension is used to instatiate the Wristband Auth SDK.  It takes a `WristbandAuthConfig` type as an argument.
+The `AddWristbandAuth()` extension is used to instatiate the Wristband Auth SDK.
 
 ```csharp
-// Configuration JSON
-builder.Services.AddWristbandAuth(builder.Configuration);
-
-// or...
-
 // Direct Configuration
 builder.Services.AddWristbandAuth(options =>
 {
@@ -661,20 +923,20 @@ builder.Services.AddWristbandAuth(options =>
 });
 ```
 
-| AuthConfig Options | Type | Required | Description                                                                                                                                                                                                                                                                                                                                                                                                  |
-| ---------- | ---- |----|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ClientId | string | Yes | The ID of the Wristband client.                                                                                                                                                                                                                                                                                                                                                                              |
-| ClientSecret | string | Yes | The client's secret.                                                                                                                                                                                                                                                                                                                                                                                         |
-| CustomApplicationLoginPageUrl | string | No | Custom Application-Level Login Page URL (i.e. Tenant Discovery Page URL). This value only needs to be provided if you are self-hosting the application login page. By default, the SDK will use your Wristband-hosted Application-Level Login page URL. If this value is provided, the SDK will redirect to this URL in certain cases where it cannot resolve a proper Tenant-Level Login URL.               |
-| DangerouslyDisableSecureCookies | boolean | No | USE WITH CAUTION: If set to `true`, the "Secure" attribute will not be included in any cookie settings. This should only be done when testing in local development environments that don't have HTTPS enabed.  If not provided, this value defaults to `false`.                                                                                                                                              |
-| LoginStateSecret | string | Yes | A 32 byte (or longer) secret used for encryption and decryption of login state cookies. You can run `openssl rand -base64 32` to create a secret from your CLI.                                                                                                                                                                                                                                              |
-| LoginUrl | string | Yes | The URL of your application's login endpoint.  This is the endpoint within your application that redirects to Wristband to initialize the login flow.                                                                                                                                                                                                                                                        |
-| RedirectUri | string | Yes | The URI that Wristband will redirect to after authenticating a user.  This should point to your application's callback endpoint.                                                                                                                                                                                                                                                                             |
+| AuthConfig Options | Type | Required | Description |
+| ------------------ | ---- | -------- | ----------- |
+| ClientId | string | Yes | The ID of the Wristband client. |
+| ClientSecret | string | Yes | The client's secret. |
+| CustomApplicationLoginPageUrl | string | No | Custom Application-Level Login Page URL (i.e. Tenant Discovery Page URL). This value only needs to be provided if you are self-hosting the application login page. By default, the SDK will use your Wristband-hosted Application-Level Login page URL. If this value is provided, the SDK will redirect to this URL in certain cases where it cannot resolve a proper Tenant-Level Login URL. |
+| DangerouslyDisableSecureCookies | boolean | No | USE WITH CAUTION: If set to `true`, the "Secure" attribute will not be included in any cookie settings. This should only be done when testing in local development environments that don't have HTTPS enabed.  If not provided, this value defaults to `false`. |
+| LoginStateSecret | string | Yes | A 32 byte (or longer) secret used for encryption and decryption of login state cookies. You can run `openssl rand -base64 32` to create a secret from your CLI. |
+| LoginUrl | string | Yes | The URL of your application's login endpoint.  This is the endpoint within your application that redirects to Wristband to initialize the login flow. |
+| RedirectUri | string | Yes | The URI that Wristband will redirect to after authenticating a user.  This should point to your application's callback endpoint. |
 | RootDomain | string | Only if using tenant subdomains | The root domain for your application. This value only needs to be specified if you use tenant subdomains in your login and redirect URLs.  The root domain should be set to the portion of the domain following the tenant subdomain.  For example, if your application uses tenant subdomains such as `tenantA.yourapp.com` and `tenantB.yourapp.com`, then the root domain should be set to `yourapp.com`. |
-| Scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`.                                                                                                                                                                  |
-| UseCustomDomains | boolean | No | Indicates whether your Wristband application is configured to use custom domains. Defaults to `false`.                                                                                                                                                                                                                                                                                                       |
-| UseTenantSubdomains | boolean | No | Indicates whether tenant subdomains are used for your application's authentication endpoints (e.g. login and callback). Defaults to `false`.                                                                                                                                                                                                                                                                 |
-| WristbandApplicationDomain | string | Yes | The vanity domain of the Wristband application.                                                                                                                                                                                                                                                                                                                                                              |
+| Scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`. |
+| UseCustomDomains | boolean | No | Indicates whether your Wristband application is configured to use custom domains. Defaults to `false`. |
+| UseTenantSubdomains | boolean | No | Indicates whether tenant subdomains are used for your application's authentication endpoints (e.g. login and callback). Defaults to `false`. |
+| WristbandApplicationDomain | string | Yes | The vanity domain of the Wristband application. |
 
 
 ## API
