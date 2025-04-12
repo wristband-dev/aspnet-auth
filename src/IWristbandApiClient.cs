@@ -1,9 +1,9 @@
 namespace Wristband.AspNet.Auth;
 
 /// <summary>
-/// Interface for functionality around making REST API calls to the Wristband platform.
+/// Interface for handling REST API requests to the Wristband platform.
 /// </summary>
-internal interface IWristbandNetworking
+internal interface IWristbandApiClient
 {
     /// <summary>
     /// Calls the Wristband Token Endpoint with the authorization code grant type to exchange an authorization code for tokens.

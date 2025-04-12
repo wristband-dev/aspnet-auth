@@ -11,7 +11,7 @@ namespace Wristband.AspNet.Auth.Tests;
 public class LoginTests
 {
     private readonly Mock<ILoginStateHandler> _mockLoginStateHandler;
-    private readonly Mock<IWristbandNetworking> _mockNetworking;
+    private readonly Mock<IWristbandApiClient> _mockApiClient;
     private readonly WristbandAuthConfig _defaultConfig;
 
     public LoginTests()
@@ -27,7 +27,7 @@ public class LoginTests
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
-        _mockNetworking = new Mock<IWristbandNetworking>();
+        _mockApiClient = new Mock<IWristbandApiClient>();
         SetupDefaultLoginStateMock();
     }
 
@@ -272,10 +272,10 @@ public class LoginTests
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);
 
-        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandNetworking", BindingFlags.NonPublic | BindingFlags.Instance);
+        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         if (fieldInfo != null)
         {
-            fieldInfo.SetValue(wristbandAuthService, _mockNetworking.Object);
+            fieldInfo.SetValue(wristbandAuthService, _mockApiClient.Object);
         }
 
         return wristbandAuthService;
