@@ -25,7 +25,7 @@ public class WristbandAuthService : IWristbandAuthService
     private readonly List<string> mScopes;
     private readonly bool mUseCustomDomains;
     private readonly bool mUseTenantSubdomains;
-    private readonly string mWristbandApplicationDomain;
+    private readonly string mWristbandApplicationVanityDomain;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WristbandAuthService"/> class for production use.
@@ -50,61 +50,61 @@ public class WristbandAuthService : IWristbandAuthService
     {
         if (string.IsNullOrEmpty(authConfig.ClientId))
         {
-            throw new ArgumentException("The [clientId] config must have a value.");
+            throw new ArgumentException("The [ClientId] config must have a value.");
         }
 
         if (string.IsNullOrEmpty(authConfig.ClientSecret))
         {
-            throw new ArgumentException("The [clientSecret] config must have a value.");
+            throw new ArgumentException("The [ClientSecret] config must have a value.");
         }
 
         if (string.IsNullOrEmpty(authConfig.LoginStateSecret) || authConfig.LoginStateSecret.Length < 32)
         {
-            throw new ArgumentException("The [loginStateSecret] config must have a value of at least 32 characters.");
+            throw new ArgumentException("The [LoginStateSecret] config must have a value of at least 32 characters.");
         }
 
         if (string.IsNullOrEmpty(authConfig.LoginUrl))
         {
-            throw new ArgumentException("The [loginUrl] config must have a value.");
+            throw new ArgumentException("The [LoginUrl] config must have a value.");
         }
 
         if (string.IsNullOrEmpty(authConfig.RedirectUri))
         {
-            throw new ArgumentException("The [redirectUri] config must have a value.");
+            throw new ArgumentException("The [RedirectUri] config must have a value.");
         }
 
-        if (string.IsNullOrEmpty(authConfig.WristbandApplicationDomain))
+        if (string.IsNullOrEmpty(authConfig.WristbandApplicationVanityDomain))
         {
-            throw new ArgumentException("The [wristbandApplicationDomain] config must have a value.");
+            throw new ArgumentException("The [WristbandApplicationVanityDomain] config must have a value.");
         }
 
         if (authConfig.UseTenantSubdomains.HasValue && authConfig.UseTenantSubdomains.Value)
         {
             if (string.IsNullOrEmpty(authConfig.RootDomain))
             {
-                throw new ArgumentException("The [rootDomain] config must have a value when using tenant subdomains.");
+                throw new ArgumentException("The [RootDomain] config must have a value when using tenant subdomains.");
             }
 
             if (!authConfig.LoginUrl.Contains(TenantDomainToken))
             {
-                throw new ArgumentException($"The [loginUrl] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
+                throw new ArgumentException($"The [LoginUrl] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
             }
 
             if (!authConfig.RedirectUri.Contains(TenantDomainToken))
             {
-                throw new ArgumentException($"The [redirectUri] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
+                throw new ArgumentException($"The [RedirectUri] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
             }
         }
         else
         {
             if (authConfig.LoginUrl.Contains(TenantDomainToken))
             {
-                throw new ArgumentException($"The [loginUrl] cannot contain the \"{TenantDomainToken}\" token when tenant subdomains are not used.");
+                throw new ArgumentException($"The [LoginUrl] cannot contain the \"{TenantDomainToken}\" token when tenant subdomains are not used.");
             }
 
             if (authConfig.RedirectUri.Contains(TenantDomainToken))
             {
-                throw new ArgumentException($"The [redirectUri] cannot contain the \"{TenantDomainToken}\" token when tenant subdomains are not used.");
+                throw new ArgumentException($"The [RedirectUri] cannot contain the \"{TenantDomainToken}\" token when tenant subdomains are not used.");
             }
         }
 
@@ -122,7 +122,7 @@ public class WristbandAuthService : IWristbandAuthService
         mScopes = (authConfig.Scopes != null && authConfig.Scopes.Count > 0) ? authConfig.Scopes : new List<string> { "openid", "offline_access", "email" };
         mUseCustomDomains = authConfig.UseCustomDomains.HasValue ? authConfig.UseCustomDomains.Value : false;
         mUseTenantSubdomains = authConfig.UseTenantSubdomains.HasValue ? authConfig.UseTenantSubdomains.Value : false;
-        mWristbandApplicationDomain = authConfig.WristbandApplicationDomain;
+        mWristbandApplicationVanityDomain = authConfig.WristbandApplicationVanityDomain;
     }
 
     /// <summary>
@@ -153,7 +153,7 @@ public class WristbandAuthService : IWristbandAuthService
             string.IsNullOrEmpty(defaultTenantDomainName))
         {
             var apploginUrl = !string.IsNullOrEmpty(mCustomApplicationLoginPageUrl)
-                ? mCustomApplicationLoginPageUrl : $"https://{mWristbandApplicationDomain}/login";
+                ? mCustomApplicationLoginPageUrl : $"https://{mWristbandApplicationVanityDomain}/login";
             return await Task.FromResult($"{apploginUrl}?client_id={mClientId}");
         }
 
@@ -198,7 +198,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         if (!string.IsNullOrEmpty(tenantDomainName))
         {
-            return await Task.FromResult($"https://{tenantDomainName}{separator}{mWristbandApplicationDomain}/api/v1/oauth2/authorize?{queryString}");
+            return await Task.FromResult($"https://{tenantDomainName}{separator}{mWristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}");
         }
 
         if (!string.IsNullOrEmpty(defaultTenantCustomDomain))
@@ -206,7 +206,7 @@ public class WristbandAuthService : IWristbandAuthService
             return await Task.FromResult($"https://{defaultTenantCustomDomain}/api/v1/oauth2/authorize?{queryString}");
         }
 
-        return await Task.FromResult($"https://{defaultTenantDomainName}{separator}{mWristbandApplicationDomain}/api/v1/oauth2/authorize?{queryString}");
+        return await Task.FromResult($"https://{defaultTenantDomainName}{separator}{mWristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}");
     }
 
     /// <summary>
@@ -350,7 +350,7 @@ public class WristbandAuthService : IWristbandAuthService
         var host = context.Request.Host.Value;
         var appLoginUrl = !string.IsNullOrEmpty(mCustomApplicationLoginPageUrl)
             ? mCustomApplicationLoginPageUrl
-            : $"https://{mWristbandApplicationDomain}/login";
+            : $"https://{mWristbandApplicationVanityDomain}/login";
 
         if (string.IsNullOrEmpty(logoutConfig.TenantCustomDomain))
         {
@@ -377,7 +377,7 @@ public class WristbandAuthService : IWristbandAuthService
         string separator = mUseCustomDomains ? "." : "-";
         string tenantDomainToUse = !string.IsNullOrEmpty(logoutConfig.TenantCustomDomain)
             ? logoutConfig.TenantCustomDomain
-            : $"{tenantDomainName}{separator}{mWristbandApplicationDomain}";
+            : $"{tenantDomainName}{separator}{mWristbandApplicationVanityDomain}";
 
         return $"https://{tenantDomainToUse}/api/v1/logout?{logoutQuery}";
     }

@@ -21,7 +21,7 @@ public class RefreshTokenIfExpiredTests
             LoginStateSecret = new string('a', 32),
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
-            WristbandApplicationDomain = "example.com",
+            WristbandApplicationVanityDomain = "example.com",
             RootDomain = "example.com",
             UseCustomDomains = false,
             UseTenantSubdomains = false

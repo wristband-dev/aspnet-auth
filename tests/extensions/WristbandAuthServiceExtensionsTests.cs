@@ -21,7 +21,7 @@ public class WristbandServiceExtensionsTests
                 {"WristbandAuthConfig:LoginStateSecret", "this-is-a-secret-that-is-at-least-32-chars"},
                 {"WristbandAuthConfig:LoginUrl", "https://login.url"},
                 {"WristbandAuthConfig:RedirectUri", "https://redirect.uri"},
-                {"WristbandAuthConfig:WristbandApplicationDomain", "wristband.domain"}
+                {"WristbandAuthConfig:WristbandApplicationVanityDomain", "wristband.domain"}
             })
             .Build();
 
@@ -47,7 +47,7 @@ public class WristbandServiceExtensionsTests
                 {"CustomSection:LoginStateSecret", "this-is-a-secret-that-is-at-least-32-chars"},
                 {"CustomSection:LoginUrl", "https://login.url"},
                 {"CustomSection:RedirectUri", "https://redirect.uri"},
-                {"CustomSection:WristbandApplicationDomain", "wristband.domain"}
+                {"CustomSection:WristbandApplicationVanityDomain", "wristband.domain"}
             })
             .Build();
 
@@ -73,7 +73,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -102,7 +102,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         }, mockFactory.Object);
 
         var serviceProvider = services.BuildServiceProvider();
@@ -124,7 +124,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -163,7 +163,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         }, mockFactory.Object);
 
         var serviceProvider = services.BuildServiceProvider();
@@ -197,7 +197,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         services.AddWristbandAuth("auth02", options =>
@@ -207,7 +207,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -242,7 +242,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         var serviceProvider = services.BuildServiceProvider();
@@ -266,7 +266,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         var registration = services.FirstOrDefault(sd => sd.ServiceType == typeof(IWristbandAuthService));
@@ -286,7 +286,7 @@ public class WristbandServiceExtensionsTests
             options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
             options.LoginUrl = "https://login.url";
             options.RedirectUri = "https://redirect.uri";
-            options.WristbandApplicationDomain = "wristband.domain";
+            options.WristbandApplicationVanityDomain = "wristband.domain";
         });
 
         var registration = services.FirstOrDefault(sd => sd.ServiceType == typeof(NamedWristbandAuthService));

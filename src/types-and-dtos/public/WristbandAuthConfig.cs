@@ -20,7 +20,7 @@ public class WristbandAuthConfig
     /// <param name="loginStateSecret">A secret (32 or more characters in length) used for encryption and decryption of login state cookies.</param>
     /// <param name="loginUrl">The URL for initiating the login request.</param>
     /// <param name="redirectUri">The redirect URI for callback after authentication.</param>
-    /// <param name="wristbandApplicationDomain">The vanity domain of the Wristband application.</param>
+    /// <param name="wristbandApplicationVanityDomain">The vanity domain of the Wristband application.</param>
     /// <param name="customApplicationLoginPageUrl">Custom application login (tenant discovery) page URL if self-hosting the application login/tenant discovery UI.</param>
     /// <param name="dangerouslyDisableSecureCookies">If set to true, the "Secure" attribute will not be included in any cookie settings. Should be used only in local development.</param>
     /// <param name="rootDomain">The root domain for your application.</param>
@@ -33,7 +33,7 @@ public class WristbandAuthConfig
         string? loginStateSecret,
         string? loginUrl,
         string? redirectUri,
-        string? wristbandApplicationDomain,
+        string? wristbandApplicationVanityDomain,
         string? customApplicationLoginPageUrl,
         bool? dangerouslyDisableSecureCookies,
         string? rootDomain,
@@ -46,7 +46,7 @@ public class WristbandAuthConfig
         LoginStateSecret = loginStateSecret;
         LoginUrl = loginUrl;
         RedirectUri = redirectUri;
-        WristbandApplicationDomain = wristbandApplicationDomain;
+        WristbandApplicationVanityDomain = wristbandApplicationVanityDomain;
         CustomApplicationLoginPageUrl = customApplicationLoginPageUrl;
         DangerouslyDisableSecureCookies = dangerouslyDisableSecureCookies;
         RootDomain = rootDomain;
@@ -113,5 +113,5 @@ public class WristbandAuthConfig
     /// <summary>
     /// Gets or sets the vanity domain of the Wristband application.
     /// </summary>
-    public string? WristbandApplicationDomain { get; set; }
+    public string? WristbandApplicationVanityDomain { get; set; }
 }

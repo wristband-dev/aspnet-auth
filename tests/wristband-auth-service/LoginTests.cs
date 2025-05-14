@@ -23,7 +23,7 @@ public class LoginTests
             LoginStateSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             LoginUrl = "https://login.example.com",
             RedirectUri = "https://app.example.com/callback",
-            WristbandApplicationDomain = "wristband.example.com"
+            WristbandApplicationVanityDomain = "wristband.example.com"
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
@@ -41,7 +41,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             UseCustomDomains = false,
             UseTenantSubdomains = false,
         };
@@ -50,7 +50,7 @@ public class LoginTests
 
         var result = await service.Login(httpContext, null);
 
-        var expectedUrl = $"https://{_defaultConfig.WristbandApplicationDomain}/login?client_id={_defaultConfig.ClientId}";
+        var expectedUrl = $"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}";
         Assert.Equal(expectedUrl, result);
     }
 
@@ -64,7 +64,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             CustomApplicationLoginPageUrl = "https://custom.example.com/login"
         };
         var service = SetupWristbandAuthService(config);
@@ -85,7 +85,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             UseTenantSubdomains = true,
             RootDomain = "example.com"
         };
@@ -111,7 +111,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             UseTenantSubdomains = true,
             RootDomain = "example.com"
         };
@@ -137,7 +137,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             UseTenantSubdomains = false,
             UseCustomDomains = false
         };
@@ -149,7 +149,7 @@ public class LoginTests
 
         var result = await service.Login(httpContext, null);
 
-        var expectedUrl = $"https://{tenantDomain}-{_defaultConfig.WristbandApplicationDomain}/api/v1/oauth2/authorize";
+        var expectedUrl = $"https://{tenantDomain}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize";
         Assert.StartsWith(expectedUrl, result);
 
         var uri = new Uri(result);
@@ -183,7 +183,7 @@ public class LoginTests
 
         var result = await service.Login(httpContext, loginConfig);
 
-        Assert.StartsWith($"https://{defaultTenantName}-{_defaultConfig.WristbandApplicationDomain}/api/v1/oauth2/authorize?", result);
+        Assert.StartsWith($"https://{defaultTenantName}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
     }
 
     [Fact]
@@ -196,7 +196,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             UseCustomDomains = true
         };
         var service = SetupWristbandAuthService(config);
@@ -207,7 +207,7 @@ public class LoginTests
 
         var result = await service.Login(httpContext, null);
 
-        Assert.Contains($"{tenantDomain}.{config.WristbandApplicationDomain}", result);
+        Assert.Contains($"{tenantDomain}.{config.WristbandApplicationVanityDomain}", result);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class LoginTests
 
         var result = await service.Login(httpContext, null);
 
-        Assert.Contains($"{tenantDomain}-{_defaultConfig.WristbandApplicationDomain}", result);
+        Assert.Contains($"{tenantDomain}-{_defaultConfig.WristbandApplicationVanityDomain}", result);
     }
 
     [Fact]
@@ -248,7 +248,7 @@ public class LoginTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             Scopes = new List<string> { "openid", "offline_access", "email", "profile", "custom_scope" }
         };
         var service = SetupWristbandAuthService(config);

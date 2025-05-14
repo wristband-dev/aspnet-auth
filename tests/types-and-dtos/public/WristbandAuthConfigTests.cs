@@ -12,7 +12,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Null(config.LoginStateSecret);
             Assert.Null(config.LoginUrl);
             Assert.Null(config.RedirectUri);
-            Assert.Null(config.WristbandApplicationDomain);
+            Assert.Null(config.WristbandApplicationVanityDomain);
             Assert.Null(config.CustomApplicationLoginPageUrl);
             Assert.Null(config.RootDomain);
             Assert.NotNull(config.Scopes);
@@ -58,7 +58,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal(loginStateSecret, config.LoginStateSecret);
             Assert.Equal(loginUrl, config.LoginUrl);
             Assert.Equal(redirectUri, config.RedirectUri);
-            Assert.Equal(wristbandApplicationDomain, config.WristbandApplicationDomain);
+            Assert.Equal(wristbandApplicationDomain, config.WristbandApplicationVanityDomain);
             Assert.Equal(customApplicationLoginPageUrl, config.CustomApplicationLoginPageUrl);
             Assert.Equal(rootDomain, config.RootDomain);
             Assert.NotNull(config.Scopes);
@@ -78,7 +78,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Null(config.LoginStateSecret);
             Assert.Null(config.LoginUrl);
             Assert.Null(config.RedirectUri);
-            Assert.Null(config.WristbandApplicationDomain);
+            Assert.Null(config.WristbandApplicationVanityDomain);
             Assert.Null(config.CustomApplicationLoginPageUrl);
             Assert.Null(config.RootDomain);
             Assert.Null(config.Scopes);
@@ -97,7 +97,7 @@ namespace Wristband.AspNet.Auth.Tests
             config.LoginStateSecret = "updated-login-state-secret";
             config.LoginUrl = "https://updated-login.example.com";
             config.RedirectUri = "https://updated.example.com/callback";
-            config.WristbandApplicationDomain = "updated-wristband.example.com";
+            config.WristbandApplicationVanityDomain = "updated-wristband.example.com";
             config.CustomApplicationLoginPageUrl = "https://updated-custom-login.example.com";
             config.DangerouslyDisableSecureCookies = true;
             config.RootDomain = "updated-example.com";
@@ -110,7 +110,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("updated-login-state-secret", config.LoginStateSecret);
             Assert.Equal("https://updated-login.example.com", config.LoginUrl);
             Assert.Equal("https://updated.example.com/callback", config.RedirectUri);
-            Assert.Equal("updated-wristband.example.com", config.WristbandApplicationDomain);
+            Assert.Equal("updated-wristband.example.com", config.WristbandApplicationVanityDomain);
             Assert.Equal("https://updated-custom-login.example.com", config.CustomApplicationLoginPageUrl);
             Assert.Equal("updated-example.com", config.RootDomain);
             Assert.NotNull(config.Scopes);
