@@ -23,7 +23,7 @@ public class CallbackTests
             LoginStateSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             LoginUrl = "https://login.example.com",
             RedirectUri = "https://app.example.com/callback",
-            WristbandApplicationDomain = "wristband.example.com"
+            WristbandApplicationVanityDomain = "wristband.example.com"
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
@@ -71,7 +71,7 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Result);
+        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
         Assert.NotEmpty(result.RedirectUrl);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
     }
@@ -88,7 +88,7 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Result);
+        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
         Assert.NotEmpty(result.RedirectUrl);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
     }
@@ -151,7 +151,7 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.COMPLETED, result.Result);
+        Assert.Equal(CallbackResultType.COMPLETED, result.Type);
         Assert.NotNull(result.CallbackData);
         Assert.Empty(result.RedirectUrl);
         Assert.Equal("tenant1", result.CallbackData.TenantDomainName);
@@ -172,7 +172,7 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.COMPLETED, result.Result);
+        Assert.Equal(CallbackResultType.COMPLETED, result.Type);
         Assert.NotNull(result.CallbackData);
         Assert.Equal(customDomain, result.CallbackData.TenantCustomDomain);
     }
@@ -196,7 +196,7 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Result);
+        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
         Assert.Equal($"{_defaultConfig.LoginUrl}?tenant_domain=tenant1", result.RedirectUrl);
 
@@ -217,7 +217,7 @@ public class CallbackTests
             LoginStateSecret = _defaultConfig.LoginStateSecret,
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
-            WristbandApplicationDomain = _defaultConfig.WristbandApplicationDomain,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             UseTenantSubdomains = true,
             RootDomain = "example.com"
         };
@@ -237,7 +237,7 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Result);
+        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
 
         var expectedUrl = "https://tenant1.example.com/login";

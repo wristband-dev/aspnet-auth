@@ -39,7 +39,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var result = new CallbackResult(CallbackResultType.COMPLETED, callbackData, "https://example.com");
 
-            Assert.Equal(CallbackResultType.COMPLETED, result.Result);
+            Assert.Equal(CallbackResultType.COMPLETED, result.Type);
             Assert.Same(callbackData, result.CallbackData);
             Assert.Equal("https://example.com", result.RedirectUrl);
         }
@@ -52,7 +52,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var result = new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, callbackData, redirectUrl);
 
-            Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Result);
+            Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
             Assert.Same(callbackData, result.CallbackData);
             Assert.Equal(redirectUrl, result.RedirectUrl);
         }

@@ -48,12 +48,13 @@ You can learn more about how authentication works in Wristband in our documentat
 ## Table of Contents
 
 - [Requirements](#requirements)
+- [Migrating From Older SDK Versions](#migrating-from-older-sdk-versions)
 - [Installation](#1-installation)
 - [Wristband Configuration](#2-wristband-configuration)
 - [SDK Configuration](#3-sdk-configuration)
   - [Non-Secret Values Configuration](#non-secret-values-configuration)
   - [Secret Values Configuration](#secret-values-configuration)
-- [Application Session Configuration](#4-applicaiton-session-configuration)
+- [Application Session Configuration](#4-application-session-configuration)
 - [Auth Endpoints](#5-add-auth-endpoints)
   - [Login Endpoint](#login-endpoint)
   - [Callback Endpoint](#callback-endpoint)
@@ -70,9 +71,21 @@ You can learn more about how authentication works in Wristband in our documentat
   - [RefreshTokenIfExpired](#tasktokendata-refreshtokenifexpiredstring-refreshtoken-long-expiresat)
 - [Questions](#questions)
 
+<br>
+
 ## Requirements
 
 This SDK is supported for .NET 6, .NET 7, .NET 8, and .NET 9.
+
+<br>
+
+## Migrating From Older SDK Versions
+
+On an older version of our SDK? Check out our migration guide:
+
+- [Instructions for migrating to Version 1.x](migration/v1/README.md)
+
+<br>
 
 ## 1) Installation
 
@@ -90,7 +103,7 @@ You should see the dependency added to your `.csproj` file:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Wristband.AspNet.Auth" Version="0.1.0" />
+  <PackageReference Include="Wristband.AspNet.Auth" Version="1.0.0" />
 </ItemGroup>
 ```
 
@@ -122,7 +135,7 @@ Without subdomains:
   "RedirectUri": "https://example.com/auth/callback",
   "Scopes": ["openid", "offline_access", "email", "roles", "profile"],
   "UseTenantSubdomains": "false",
-  "WristbandApplicationDomain": "sometest-account.us.wristband.dev"
+  "WristbandApplicationVanityDomain": "sometest-account.us.wristband.dev"
 },
 ```
 
@@ -135,7 +148,7 @@ Using subdomains:
   "RootDomain": "example.com",
   "Scopes": ["openid", "offline_access", "email", "roles", "profile"],
   "UseTenantSubdomains": "true",
-  "WristbandApplicationDomain": "sometest-parent.us.wristband.dev"
+  "WristbandApplicationVanityDomain": "sometest-parent.us.wristband.dev"
 },
 ```
 
@@ -203,7 +216,7 @@ builder.Configuration.AddAzureKeyVault(
 
 4. Enable authentication middleware, and add the SDK's WristbandAuthenticationService in your `Program.cs` file.
 
-There are two configuration approaches to registering the M2M auth SDK:
+There are two configuration approaches to registering the auth SDK:
 
 **Default Singleton Service**
 
@@ -223,7 +236,7 @@ builder.Services.AddWristbandAuth(options =>
   options.LoginStateSecret = authConfig["LoginStateSecret"];
   options.LoginUrl = authConfig["LoginUrl"];
   options.RedirectUri = authConfig["RedirectUri"];
-  options.WristbandApplicationDomain = authConfig["WristbandApplicationDomain"];
+  options.WristbandApplicationVanityDomain = authConfig["WristbandApplicationVanityDomain"];
 });
 
 //
@@ -260,13 +273,13 @@ Then in `Program.cs`, you can register the different Backend Server OAuth2 clien
 // Program.cs
 using Wristband.AspNet.Auth;
 
-builder.Services.AddWristbandM2MAuth("auth01", options =>
+builder.Services.AddWristbandAuth("auth01", options =>
 {
     var auth01Config = builder.Configuration.GetSection("WristbandAuthConfig:auth01");
     options.ClientId = auth01Config["ClientId"];
     // ...
 });
-builder.Services.AddWristbandM2MAuth("auth02", options =>
+builder.Services.AddWristbandAuth("auth02", options =>
 {
     var auth02Config = builder.Configuration.GetSection("WristbandAuthConfig:auth02");
     options.ClientId = auth02Config["ClientId"];
@@ -277,7 +290,7 @@ builder.Services.AddWristbandM2MAuth("auth02", options =>
 ```
 
 
-## 4) Applicaiton Session Configuration
+## 4) Application Session Configuration
 
 This Wristband authentication SDK is unopinionated about how you store and manage your application session data after the user has authenticated. We typically recommend cookie-based sessions due to it being lighter-weight and not requiring a backend session store like Redis or other technologies. We recommend using ASP.NET Core's built-in cookie authentication with strict security settings and custom error handling, as shown in the example below:
 
@@ -409,7 +422,7 @@ public static class AuthRoutes
             var callbackResult = await wristbandAuth.Callback(httpContext);
 
             // For some edge cases, the SDK will require a redirect to restart the login flow.
-            if (callbackResult.Result == CallbackResultType.REDIRECT_REQUIRED)
+            if (callbackResult.Type == CallbackResultType.REDIRECT_REQUIRED)
             {
                 return Results.Redirect(callbackResult.RedirectUrl);
             }
@@ -480,7 +493,7 @@ public static class AuthRoutes
             var callbackResult = await wristbandAuth.Callback(httpContext);
 
             // For some edge cases, the SDK will require a redirect to restart the login flow.
-            if (callbackResult.Result == CallbackResultType.REDIRECT_REQUIRED)
+            if (callbackResult.Type == CallbackResultType.REDIRECT_REQUIRED)
             {
                 return Results.Redirect(callbackResult.RedirectUrl);
             }
@@ -919,7 +932,7 @@ builder.Services.AddWristbandAuth(options =>
     options.LoginStateSecret = "this-is-a-secret-that-is-at-least-32-chars";
     options.LoginUrl = "https://login.url";
     options.RedirectUri = "https://redirect.uri";
-    options.WristbandApplicationDomain = "wristband.domain";
+    options.WristbandApplicationVanityDomain = "wristband.domain";
 });
 ```
 
@@ -936,7 +949,7 @@ builder.Services.AddWristbandAuth(options =>
 | Scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`. |
 | UseCustomDomains | boolean | No | Indicates whether your Wristband application is configured to use custom domains. Defaults to `false`. |
 | UseTenantSubdomains | boolean | No | Indicates whether tenant subdomains are used for your application's authentication endpoints (e.g. login and callback). Defaults to `false`. |
-| WristbandApplicationDomain | string | Yes | The vanity domain of the Wristband application. |
+| WristbandApplicationVanityDomain | string | Yes | The vanity domain of the Wristband application. |
 
 
 ## API
@@ -997,7 +1010,7 @@ builder.Services.AddWristbandAuth(options =>
     options.LoginStateSecret = "7ffdbecc-ab7d-4134-9307-2dfcc52f7475";
     options.LoginUrl = "https://yourapp.io/auth/login";
     options.RedirectUri = "https://yourapp.io/auth/callback";
-    options.WristbandApplicationDomain = "yourapp-yourcompany.us.wristband.dev";
+    options.WristbandApplicationVanityDomain = "yourapp-yourcompany.us.wristband.dev";
 });
 ```
 
@@ -1021,7 +1034,7 @@ builder.Services.AddWristbandAuth(options =>
     options.RedirectUri = "https://{tenant_domain}.yourapp.io/auth/callback";
     options.RootDomain = "yourapp.io";
     options.UseTenantSubdomains = true;
-    options.WristbandApplicationDomain = "yourapp-yourcompany.us.wristband.dev";
+    options.WristbandApplicationVanityDomain = "yourapp-yourcompany.us.wristband.dev";
 });
 ```
 
@@ -1117,16 +1130,16 @@ The SDK will validate that the incoming state matches the Login State Cookie, an
 
 | CallbackResult Field | Type | Description |
 | -------------------- | ---- | ----------- |
-| CallbackData | CallbackData or undefined | The callback data received after authentication (`COMPLETED` result only). |
+| CallbackData | `CallbackData` or undefined | The callback data received after authentication (`COMPLETED` result only). |
 | RedirectUrl | string | A URL that you need to redirect to (`REDIRECT_REQUIRED` result only). For some edge cases, the SDK will require a redirect to restart the login flow. |
-| Result | CallbackResultType  | Enum representing the end result of callback execution. |
+| Type | `CallbackResultType`  | Enum representing the end result of callback execution. |
 
 The following are the possible `CallbackResultType` enum values that can be returned from the callback execution:
 
 | CallbackResultType  | Description |
 | ------------------- | ----------- |
-| COMPLETED  | Indicates that the callback is successfully completed and data is available for creating a session. |
-| REDIRECT_REQUIRED  | Indicates that a redirect to the login endpoint is required, and `RedirectUrl` contains the destination. |
+| `COMPLETED`  | Indicates that the callback is successfully completed and data is available for creating a session. |
+| `REDIRECT_REQUIRED`  | Indicates that a redirect to the login endpoint is required, and `RedirectUrl` contains the destination. |
 
 When the callback returns a `COMPLETED` result, all of the token and userinfo data also gets returned. This enables your application to create an application session for the user and then redirect them back into your application. The `CallbackData` is defined as follows:
 
@@ -1281,7 +1294,7 @@ var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, logoutConfig);
 var tokenData = await wristbandAuth.RefreshTokenIfExpired('98yht308hf902hc90wh09', 1710707503788);
 ```
 
-If your application is using access tokens generated by Wristband either to make API calls to Wristband or to protect other backend APIs, then your applicaiton needs to ensure that access tokens don't expire until the user's session ends.  You can use the refresh token to generate new access tokens.
+If your application is using access tokens generated by Wristband either to make API calls to Wristband or to protect other backend APIs, then your application needs to ensure that access tokens don't expire until the user's session ends.  You can use the refresh token to generate new access tokens.
 
 | Argument | Type | Required | Description |
 | -------- | ---- | -------- | ----------- |

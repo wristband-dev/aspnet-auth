@@ -15,7 +15,7 @@ public class NamedWristbandAuthServiceTests
             LoginStateSecret = new string('a', 32), // At least 32 characters
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
-            WristbandApplicationDomain = "example.com",
+            WristbandApplicationVanityDomain = "example.com",
             RootDomain = "example.com",
             UseTenantSubdomains = false
         };

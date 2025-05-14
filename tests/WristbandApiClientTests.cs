@@ -19,7 +19,7 @@ public class WristbandApiClientTests
     {
         return Options.Create(new WristbandAuthConfig
         {
-            WristbandApplicationDomain = _domain,
+            WristbandApplicationVanityDomain = _domain,
             ClientId = "test-client-id",
             ClientSecret = "test-client-secret"
         });
@@ -63,20 +63,20 @@ public class WristbandApiClientTests
     }
 
     [Theory]
-    [InlineData(null, "client-id", "client-secret", "The [wristbandApplicationDomain] config must have a value.")]
-    [InlineData("", "client-id", "client-secret", "The [wristbandApplicationDomain] config must have a value.")]
-    [InlineData("  ", "client-id", "client-secret", "The [wristbandApplicationDomain] config must have a value.")]
-    [InlineData("domain.com", null, "client-secret", "The [clientId] config must have a value.")]
-    [InlineData("domain.com", "", "client-secret", "The [clientId] config must have a value.")]
-    [InlineData("domain.com", "  ", "client-secret", "The [clientId] config must have a value.")]
-    [InlineData("domain.com", "client-id", null, "The [clientSecret] config must have a value.")]
-    [InlineData("domain.com", "client-id", "", "The [clientSecret] config must have a value.")]
-    [InlineData("domain.com", "client-id", "  ", "The [clientSecret] config must have a value.")]
+    [InlineData(null, "client-id", "client-secret", "The [WristbandApplicationVanityDomain] config must have a value.")]
+    [InlineData("", "client-id", "client-secret", "The [WristbandApplicationVanityDomain] config must have a value.")]
+    [InlineData("  ", "client-id", "client-secret", "The [WristbandApplicationVanityDomain] config must have a value.")]
+    [InlineData("domain.com", null, "client-secret", "The [ClientId] config must have a value.")]
+    [InlineData("domain.com", "", "client-secret", "The [ClientId] config must have a value.")]
+    [InlineData("domain.com", "  ", "client-secret", "The [ClientId] config must have a value.")]
+    [InlineData("domain.com", "client-id", null, "The [ClientSecret] config must have a value.")]
+    [InlineData("domain.com", "client-id", "", "The [ClientSecret] config must have a value.")]
+    [InlineData("domain.com", "client-id", "  ", "The [ClientSecret] config must have a value.")]
     public void Constructor_WithInvalidConfig_ThrowsArgumentException(string domain, string clientId, string clientSecret, string expectedMessage)
     {
         var config = new WristbandAuthConfig
         {
-            WristbandApplicationDomain = domain,
+            WristbandApplicationVanityDomain = domain,
             ClientId = clientId,
             ClientSecret = clientSecret
         };

@@ -15,7 +15,7 @@ public class WristbandAuthServiceConstructorTests
             LoginStateSecret = new string('a', 32), // At least 32 characters
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
-            WristbandApplicationDomain = "example.com",
+            WristbandApplicationVanityDomain = "example.com",
             RootDomain = "example.com",
             UseTenantSubdomains = false
         });
@@ -59,7 +59,7 @@ public class WristbandAuthServiceConstructorTests
         config.ClientId = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [clientId] config must have a value.", ex.Message);
+        Assert.Equal("The [ClientId] config must have a value.", ex.Message);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class WristbandAuthServiceConstructorTests
         config.ClientSecret = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [clientSecret] config must have a value.", ex.Message);
+        Assert.Equal("The [ClientSecret] config must have a value.", ex.Message);
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public class WristbandAuthServiceConstructorTests
         config.LoginStateSecret = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [loginStateSecret] config must have a value of at least 32 characters.", ex.Message);
+        Assert.Equal("The [LoginStateSecret] config must have a value of at least 32 characters.", ex.Message);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class WristbandAuthServiceConstructorTests
         config.LoginStateSecret = "short_secret";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [loginStateSecret] config must have a value of at least 32 characters.", ex.Message);
+        Assert.Equal("The [LoginStateSecret] config must have a value of at least 32 characters.", ex.Message);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class WristbandAuthServiceConstructorTests
         config.LoginUrl = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [loginUrl] config must have a value.", ex.Message);
+        Assert.Equal("The [LoginUrl] config must have a value.", ex.Message);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class WristbandAuthServiceConstructorTests
         config.RedirectUri = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [redirectUri] config must have a value.", ex.Message);
+        Assert.Equal("The [RedirectUri] config must have a value.", ex.Message);
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class WristbandAuthServiceConstructorTests
         config.LoginUrl = "https://{tenant_domain}.example.com/login";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [loginUrl] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
+        Assert.Equal("The [LoginUrl] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class WristbandAuthServiceConstructorTests
         config.RedirectUri = "https://{tenant_domain}.example.com/callback";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [redirectUri] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
+        Assert.Equal("The [RedirectUri] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
     }
 
     [Fact]
@@ -195,13 +195,13 @@ public class WristbandAuthServiceConstructorTests
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenWristbandApplicationDomainIsEmpty()
+    public void Constructor_ShouldThrowArgumentException_WhenWristbandApplicationVanityDomainIsEmpty()
     {
         var config = CreateValidOptions().Value;
-        config.WristbandApplicationDomain = "";
+        config.WristbandApplicationVanityDomain = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [wristbandApplicationDomain] config must have a value.", ex.Message);
+        Assert.Equal("The [WristbandApplicationVanityDomain] config must have a value.", ex.Message);
     }
 
     [Fact]
@@ -212,7 +212,7 @@ public class WristbandAuthServiceConstructorTests
         config.RootDomain = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [rootDomain] config must have a value when using tenant subdomains.", ex.Message);
+        Assert.Equal("The [RootDomain] config must have a value when using tenant subdomains.", ex.Message);
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public class WristbandAuthServiceConstructorTests
         config.RootDomain = "example.com";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [loginUrl] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
+        Assert.Equal("The [LoginUrl] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
     }
 
     [Fact]
@@ -237,7 +237,7 @@ public class WristbandAuthServiceConstructorTests
         config.LoginUrl = "https://{tenant_domain}.example.com/login";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [redirectUri] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
+        Assert.Equal("The [RedirectUri] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
     }
 
     [Fact]

@@ -21,7 +21,7 @@ internal class WristbandApiClient : IWristbandApiClient
 
     private readonly AuthenticationHeaderValue _basicAuthHeader;
     private readonly HttpClient _httpClient;
-    private readonly string _wristbandApplicationDomain;
+    private readonly string _wristbandApplicationVanityDomain;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WristbandApiClient"/> class for production use.
@@ -45,22 +45,22 @@ internal class WristbandApiClient : IWristbandApiClient
             throw new ArgumentNullException(nameof(authConfig), "The auth config cannot be null.");
         }
 
-        if (string.IsNullOrWhiteSpace(authConfig.WristbandApplicationDomain))
+        if (string.IsNullOrWhiteSpace(authConfig.WristbandApplicationVanityDomain))
         {
-            throw new ArgumentException("The [wristbandApplicationDomain] config must have a value.");
+            throw new ArgumentException("The [WristbandApplicationVanityDomain] config must have a value.");
         }
 
         if (string.IsNullOrWhiteSpace(authConfig.ClientId))
         {
-            throw new ArgumentException("The [clientId] config must have a value.");
+            throw new ArgumentException("The [ClientId] config must have a value.");
         }
 
         if (string.IsNullOrWhiteSpace(authConfig.ClientSecret))
         {
-            throw new ArgumentException("The [clientSecret] config must have a value.");
+            throw new ArgumentException("The [ClientSecret] config must have a value.");
         }
 
-        _wristbandApplicationDomain = authConfig.WristbandApplicationDomain;
+        _wristbandApplicationVanityDomain = authConfig.WristbandApplicationVanityDomain;
         _basicAuthHeader = new AuthenticationHeaderValue(
             "Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{authConfig.ClientId}:{authConfig.ClientSecret}")));
@@ -84,7 +84,7 @@ internal class WristbandApiClient : IWristbandApiClient
             { "code_verifier", codeVerifier },
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationDomain}/api/v1/oauth2/token")
+        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
         {
             Content = new FormUrlEncodedContent(formParams),
         };
@@ -141,7 +141,7 @@ internal class WristbandApiClient : IWristbandApiClient
     /// <inheritdoc />
     public async Task<UserInfo> GetUserinfo(string accessToken)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, $"https://{_wristbandApplicationDomain}/api/v1/oauth2/userinfo");
+        var request = new HttpRequestMessage(HttpMethod.Get, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/userinfo");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         var response = await _httpClient.SendAsync(request);
@@ -163,7 +163,7 @@ internal class WristbandApiClient : IWristbandApiClient
             { "refresh_token", refreshToken },
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationDomain}/api/v1/oauth2/token")
+        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
         {
             Content = new FormUrlEncodedContent(formParams),
         };
@@ -215,7 +215,7 @@ internal class WristbandApiClient : IWristbandApiClient
             { "token", refreshToken },
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationDomain}/api/v1/oauth2/revoke")
+        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/revoke")
         {
             Content = new FormUrlEncodedContent(formParams),
         };
