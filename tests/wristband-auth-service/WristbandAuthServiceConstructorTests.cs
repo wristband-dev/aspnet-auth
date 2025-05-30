@@ -16,8 +16,6 @@ public class WristbandAuthServiceConstructorTests
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
             WristbandApplicationVanityDomain = "example.com",
-            RootDomain = "example.com",
-            UseTenantSubdomains = false
         });
     }
 
@@ -113,22 +111,22 @@ public class WristbandAuthServiceConstructorTests
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenLoginUrlContainsTenantDomainToken_AndUseTenantSubdomainsIsFalse()
+    public void Constructor_ShouldThrowArgumentException_WhenLoginUrlContainsTenantDomainToken_AndNoRootDomain()
     {
         var config = CreateValidOptions().Value;
-        config.UseTenantSubdomains = false;
         config.LoginUrl = "https://{tenant_domain}.example.com/login";
+        config.ParseTenantFromRootDomain = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
         Assert.Equal("The [LoginUrl] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenRedirectUriContainsTenantDomainToken_AndUseTenantSubdomainsIsFalse()
+    public void Constructor_ShouldThrowArgumentException_WhenRedirectUriContainsTenantDomainToken_AndNoRootDomain()
     {
         var config = CreateValidOptions().Value;
-        config.UseTenantSubdomains = false;
         config.RedirectUri = "https://{tenant_domain}.example.com/callback";
+        config.ParseTenantFromRootDomain = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
         Assert.Equal("The [RedirectUri] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
@@ -172,24 +170,24 @@ public class WristbandAuthServiceConstructorTests
     public void Constructor_ShouldSetDefaultValues_WhenOptionalParametersNotProvided()
     {
         var config = CreateValidOptions().Value;
-        config.UseCustomDomains = null;
+        config.IsApplicationCustomDomainActive = null;
         config.DangerouslyDisableSecureCookies = null;
         config.CustomApplicationLoginPageUrl = null;
 
         var service = new WristbandAuthService(config);
 
-        var useCustomDomainsField = typeof(WristbandAuthService).GetField("mUseCustomDomains",
+        var isApplicationCustomDomainActiveField = typeof(WristbandAuthService).GetField("mIsApplicationCustomDomainActive",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var dangerouslyDisableSecureCookiesField = typeof(WristbandAuthService).GetField("mDangerouslyDisableSecureCookies",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         var customApplicationLoginPageUrlField = typeof(WristbandAuthService).GetField("mCustomApplicationLoginPageUrl",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
 
-        Assert.NotNull(useCustomDomainsField);
+        Assert.NotNull(isApplicationCustomDomainActiveField);
         Assert.NotNull(dangerouslyDisableSecureCookiesField);
         Assert.NotNull(customApplicationLoginPageUrlField);
 
-        Assert.False((bool)useCustomDomainsField.GetValue(service)!);
+        Assert.False((bool)isApplicationCustomDomainActiveField.GetValue(service)!);
         Assert.False((bool)dangerouslyDisableSecureCookiesField.GetValue(service)!);
         Assert.Equal(string.Empty, (string)customApplicationLoginPageUrlField.GetValue(service)!);
     }
@@ -205,35 +203,22 @@ public class WristbandAuthServiceConstructorTests
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenUseTenantSubdomainsTrue_AndRootDomainEmpty()
+    public void Constructor_ShouldThrowArgumentException_WithRootDomain_ButLoginUrlMissingToken()
     {
         var config = CreateValidOptions().Value;
-        config.UseTenantSubdomains = true;
-        config.RootDomain = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [RootDomain] config must have a value when using tenant subdomains.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenUseTenantSubdomainsTrue_AndLoginUrlMissingToken()
-    {
-        var config = CreateValidOptions().Value;
-        config.UseTenantSubdomains = true;
         config.LoginUrl = "https://example.com/login";
-        config.RootDomain = "example.com";
+        config.ParseTenantFromRootDomain = "example.com";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
         Assert.Equal("The [LoginUrl] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenUseTenantSubdomainsTrue_AndRedirectUriMissingToken()
+    public void Constructor_ShouldThrowArgumentException_WithRootDomain_ButRedirectUriMissingToken()
     {
         var config = CreateValidOptions().Value;
-        config.UseTenantSubdomains = true;
         config.RedirectUri = "https://example.com/callback";
-        config.RootDomain = "example.com";
+        config.ParseTenantFromRootDomain = "example.com";
         config.LoginUrl = "https://{tenant_domain}.example.com/login";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
@@ -244,13 +229,13 @@ public class WristbandAuthServiceConstructorTests
     public void Constructor_ShouldSucceed_WhenAllConfigurationValid()
     {
         var config = CreateValidOptions().Value;
-        config.UseTenantSubdomains = true;
         config.LoginUrl = "https://{tenant_domain}.example.com/login";
         config.RedirectUri = "https://{tenant_domain}.example.com/callback";
         config.Scopes = new List<string> { "custom_scope" };
-        config.UseCustomDomains = true;
+        config.IsApplicationCustomDomainActive = true;
         config.DangerouslyDisableSecureCookies = true;
         config.CustomApplicationLoginPageUrl = "https://custom.example.com/login";
+        config.ParseTenantFromRootDomain = "example.com";
 
         var service = new WristbandAuthService(config);
 

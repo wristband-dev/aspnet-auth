@@ -22,9 +22,7 @@ public class RefreshTokenIfExpiredTests
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
             WristbandApplicationVanityDomain = "example.com",
-            RootDomain = "example.com",
-            UseCustomDomains = false,
-            UseTenantSubdomains = false
+            IsApplicationCustomDomainActive = false,
         };
 
         _wristbandAuthService = new WristbandAuthService(_authConfig);

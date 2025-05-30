@@ -21,10 +21,9 @@ public class WristbandAuthService : IWristbandAuthService
     private readonly string mLoginStateSecret;
     private readonly string mLoginUrl;
     private readonly string mRedirectUri;
-    private readonly string mRootDomain;
+    private readonly string mParseTenantFromRootDomain;
     private readonly List<string> mScopes;
-    private readonly bool mUseCustomDomains;
-    private readonly bool mUseTenantSubdomains;
+    private readonly bool mIsApplicationCustomDomainActive;
     private readonly string mWristbandApplicationVanityDomain;
 
     /// <summary>
@@ -78,13 +77,8 @@ public class WristbandAuthService : IWristbandAuthService
             throw new ArgumentException("The [WristbandApplicationVanityDomain] config must have a value.");
         }
 
-        if (authConfig.UseTenantSubdomains.HasValue && authConfig.UseTenantSubdomains.Value)
+        if (!string.IsNullOrEmpty(authConfig.ParseTenantFromRootDomain))
         {
-            if (string.IsNullOrEmpty(authConfig.RootDomain))
-            {
-                throw new ArgumentException("The [RootDomain] config must have a value when using tenant subdomains.");
-            }
-
             if (!authConfig.LoginUrl.Contains(TenantDomainToken))
             {
                 throw new ArgumentException($"The [LoginUrl] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
@@ -118,10 +112,9 @@ public class WristbandAuthService : IWristbandAuthService
         mLoginStateSecret = authConfig.LoginStateSecret;
         mLoginUrl = authConfig.LoginUrl;
         mRedirectUri = authConfig.RedirectUri;
-        mRootDomain = string.IsNullOrEmpty(authConfig.RootDomain) ? string.Empty : authConfig.RootDomain;
+        mParseTenantFromRootDomain = string.IsNullOrEmpty(authConfig.ParseTenantFromRootDomain) ? string.Empty : authConfig.ParseTenantFromRootDomain;
         mScopes = (authConfig.Scopes != null && authConfig.Scopes.Count > 0) ? authConfig.Scopes : new List<string> { "openid", "offline_access", "email" };
-        mUseCustomDomains = authConfig.UseCustomDomains.HasValue ? authConfig.UseCustomDomains.Value : false;
-        mUseTenantSubdomains = authConfig.UseTenantSubdomains.HasValue ? authConfig.UseTenantSubdomains.Value : false;
+        mIsApplicationCustomDomainActive = authConfig.IsApplicationCustomDomainActive.HasValue ? authConfig.IsApplicationCustomDomainActive.Value : false;
         mWristbandApplicationVanityDomain = authConfig.WristbandApplicationVanityDomain;
     }
 
@@ -142,7 +135,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         // Determine which domain-related values are present as it will be needed for the authorize URL.
         var tenantCustomDomain = ResolveTenantCustomDomainParam(context);
-        var tenantDomainName = ResolveTenantDomainName(context, mUseTenantSubdomains, mRootDomain);
+        var tenantDomainName = ResolveTenantDomainName(context, mParseTenantFromRootDomain);
         var defaultTenantCustomDomain = loginConfig.DefaultTenantCustomDomain ?? string.Empty;
         var defaultTenantDomainName = loginConfig.DefaultTenantDomainName ?? string.Empty;
 
@@ -180,7 +173,7 @@ public class WristbandAuthService : IWristbandAuthService
             { "login_hint", context.Request.Query["login_hint"].FirstOrDefault() ?? string.Empty },
         };
 
-        var separator = mUseCustomDomains ? '.' : '-';
+        var separator = mIsApplicationCustomDomainActive ? '.' : '-';
         var queryString = string.Join("&", queryParams
             .Where(p => p.Value != null)
             .Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
@@ -238,11 +231,13 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         // Resolve and validate the tenant domain name
-        var resolvedTenantDomainName = ResolveTenantDomainName(context, mUseTenantSubdomains, mRootDomain);
+        var resolvedTenantDomainName = ResolveTenantDomainName(context, mParseTenantFromRootDomain);
         if (string.IsNullOrEmpty(resolvedTenantDomainName))
         {
-            var errorCode = mUseTenantSubdomains ? "missing_tenant_subdomain" : "missing_tenant_domain";
-            var errorMessage = mUseTenantSubdomains
+            var errorCode = !string.IsNullOrEmpty(mParseTenantFromRootDomain)
+                ? "missing_tenant_subdomain"
+                : "missing_tenant_domain";
+            var errorMessage = !string.IsNullOrEmpty(mParseTenantFromRootDomain)
                 ? "Callback request URL is missing a tenant subdomain"
                 : "Callback request is missing the [tenant_domain] query parameter from Wristband";
             throw new WristbandError(errorCode, errorMessage);
@@ -250,7 +245,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         // Construct the tenant login URL in the event we have to redirect to the login endpoint
         string tenantLoginUrl;
-        if (mUseTenantSubdomains)
+        if (!string.IsNullOrEmpty(mParseTenantFromRootDomain))
         {
             tenantLoginUrl = mLoginUrl.Replace(TenantDomainToken, resolvedTenantDomainName);
         }
@@ -261,7 +256,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         if (!string.IsNullOrEmpty(tenantCustomDomainParam))
         {
-            var querySeparator = mUseTenantSubdomains ? "?" : "&";
+            var querySeparator = !string.IsNullOrEmpty(mParseTenantFromRootDomain) ? "?" : "&";
             tenantLoginUrl = $"{tenantLoginUrl}{querySeparator}tenant_custom_domain={tenantCustomDomainParam}";
         }
 
@@ -337,49 +332,51 @@ public class WristbandAuthService : IWristbandAuthService
             logoutConfig = new LogoutConfig();
         }
 
-        if (!string.IsNullOrEmpty(logoutConfig.RefreshToken))
+        if (!string.IsNullOrWhiteSpace(logoutConfig.RefreshToken))
         {
             await mWristbandApiClient.RevokeRefreshToken(logoutConfig.RefreshToken);
         }
 
         // The client ID is always required by the Wristband Logout Endpoint.
+        var tenantDomainName = ResolveTenantDomainName(context, mParseTenantFromRootDomain);
+        var tenantCustomDomainParam = ResolveTenantCustomDomainParam(context);
         var redirectUrl = !string.IsNullOrEmpty(logoutConfig.RedirectUrl) ? $"&redirect_url={logoutConfig.RedirectUrl}" : string.Empty;
-        var logoutQuery = $"client_id={mClientId}{redirectUrl}";
+        var logoutPath = $"/api/v1/logout?client_id={mClientId}{redirectUrl}";
+        string separator = mIsApplicationCustomDomainActive ? "." : "-";
 
-        // Construct the appropriate Logout Endpoint URL that the user will get redirected to.
-        var host = context.Request.Host.Value;
+        // Domain priority order resolution:
+        // 1) If the LogoutConfig has a tenant custom domain explicitly defined, use that.
+        if (!string.IsNullOrWhiteSpace(logoutConfig.TenantCustomDomain))
+        {
+            return $"https://{logoutConfig.TenantCustomDomain}{logoutPath}";
+        }
+
+        // 2) If the LogoutConfig has a tenant domain defined, then use that.
+        if (!string.IsNullOrWhiteSpace(logoutConfig.TenantDomainName))
+        {
+            return $"https://{logoutConfig.TenantDomainName}{separator}{mWristbandApplicationVanityDomain}{logoutPath}";
+        }
+
+        // 3) If the tenant_custom_domain query param exists, then use that.
+        if (!string.IsNullOrEmpty(tenantCustomDomainParam))
+        {
+            return $"https://{tenantCustomDomainParam}{logoutPath}";
+        }
+
+        // 4a) If tenant subdomains are enabled, get the tenant domain from the host.
+        // 4b) Otherwise, if tenant subdomains are not enabled, then look for it in the tenant_domain query param.
+        if (!string.IsNullOrEmpty(tenantDomainName))
+        {
+            return $"https://{tenantDomainName}{separator}{mWristbandApplicationVanityDomain}{logoutPath}";
+        }
+
+        // Fallback to app login URL (or custom logout redirect URL) if tenant cannot be determined
         var appLoginUrl = !string.IsNullOrEmpty(mCustomApplicationLoginPageUrl)
             ? mCustomApplicationLoginPageUrl
             : $"https://{mWristbandApplicationVanityDomain}/login";
-
-        if (string.IsNullOrEmpty(logoutConfig.TenantCustomDomain))
-        {
-            if (mUseTenantSubdomains &&
-                host != null &&
-                host.Substring(host.IndexOf('.') + 1) != mRootDomain)
-            {
-                return !string.IsNullOrEmpty(logoutConfig.RedirectUrl)
-                    ? logoutConfig.RedirectUrl
-                    : $"{appLoginUrl}?client_id={mClientId}";
-            }
-
-            if (!mUseTenantSubdomains && string.IsNullOrEmpty(logoutConfig.TenantDomainName))
-            {
-                return !string.IsNullOrEmpty(logoutConfig.RedirectUrl)
-                    ? logoutConfig.RedirectUrl
-                    : $"{appLoginUrl}?client_id={mClientId}";
-            }
-        }
-
-        string tenantDomainName = mUseTenantSubdomains && host != null && host.Contains(".")
-            ? host.Substring(0, host.IndexOf('.'))
-            : logoutConfig.TenantDomainName ?? string.Empty;
-        string separator = mUseCustomDomains ? "." : "-";
-        string tenantDomainToUse = !string.IsNullOrEmpty(logoutConfig.TenantCustomDomain)
-            ? logoutConfig.TenantCustomDomain
-            : $"{tenantDomainName}{separator}{mWristbandApplicationVanityDomain}";
-
-        return $"https://{tenantDomainToUse}/api/v1/logout?{logoutQuery}";
+        return !string.IsNullOrEmpty(logoutConfig.RedirectUrl)
+                ? logoutConfig.RedirectUrl
+                : $"{appLoginUrl}?client_id={mClientId}";
     }
 
     /// <summary>
@@ -457,7 +454,7 @@ public class WristbandAuthService : IWristbandAuthService
         return currentTime >= expiresAt;
     }
 
-    private static string ParseTenantSubdomain(string host, string rootDomain)
+    private static string ParseTenantSubdomain(string host, string parseTenantFromRootDomain)
     {
         if (string.IsNullOrEmpty(host))
         {
@@ -471,15 +468,17 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         var subdomain = host.Substring(0, dotIndex);
-        return !string.IsNullOrEmpty(rootDomain) && host.Substring(dotIndex + 1) == rootDomain ? subdomain : string.Empty;
+        return !string.IsNullOrEmpty(parseTenantFromRootDomain) && host.Substring(dotIndex + 1) == parseTenantFromRootDomain
+            ? subdomain
+            : string.Empty;
     }
 
-    private static string ResolveTenantDomainName(HttpContext context, bool useTenantSubdomains, string rootDomain)
+    private static string ResolveTenantDomainName(HttpContext context, string parseTenantFromRootDomain)
     {
-        if (useTenantSubdomains)
+        if (!string.IsNullOrEmpty(parseTenantFromRootDomain))
         {
             var host = context.Request.Host.Value ?? string.Empty;
-            return ParseTenantSubdomain(host, rootDomain);
+            return ParseTenantSubdomain(host, parseTenantFromRootDomain);
         }
 
         var tenantDomainParam = context.Request.Query["tenant_domain"].FirstOrDefault();

@@ -83,6 +83,7 @@ This SDK is supported for .NET 6, .NET 7, .NET 8, and .NET 9.
 
 On an older version of our SDK? Check out our migration guide:
 
+- [Instructions for migrating to Version 2.x](migration/v2/README.md)
 - [Instructions for migrating to Version 1.x](migration/v1/README.md)
 
 <br>
@@ -103,7 +104,7 @@ You should see the dependency added to your `.csproj` file:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Wristband.AspNet.Auth" Version="1.0.0" />
+  <PackageReference Include="Wristband.AspNet.Auth" Version="2.0.0" />
 </ItemGroup>
 ```
 
@@ -134,7 +135,6 @@ Without subdomains:
   "LoginUrl": "https://example.com/auth/login",
   "RedirectUri": "https://example.com/auth/callback",
   "Scopes": ["openid", "offline_access", "email", "roles", "profile"],
-  "UseTenantSubdomains": "false",
   "WristbandApplicationVanityDomain": "sometest-account.us.wristband.dev"
 },
 ```
@@ -145,9 +145,8 @@ Using subdomains:
   "ClientId": "--some-identifier--",
   "LoginUrl": "https://{tenant_domain}.example.com/auth/login",
   "RedirectUri": "https://{tenant_domain}.example.com/auth/callback",
-  "RootDomain": "example.com",
+  "ParseTenantFromRootDomain": "example.com",
   "Scopes": ["openid", "offline_access", "email", "roles", "profile"],
-  "UseTenantSubdomains": "true",
   "WristbandApplicationVanityDomain": "sometest-parent.us.wristband.dev"
 },
 ```
@@ -563,7 +562,7 @@ public static class AuthRoutes
     {
         try
         {
-            // Grab necessary session fields for the Logout() function.
+            // Grab necessary session fields for the Logout() method.
             var refreshToken = context.User.FindFirst("refreshToken")?.Value ?? string.Empty;
             var tenantCustomDomain = context.User.FindFirst("tenantCustomDomain")?.Value ?? string.Empty;
             var tenantDomainName = context.User.FindFirst("tenantDomainName")?.Value ?? string.Empty;
@@ -609,7 +608,7 @@ public static class AuthRoutes
     {
         try
         {
-            // Grab necessary session fields for the Logout() function.
+            // Grab necessary session fields for the Logout() method.
             var refreshToken = context.User.FindFirst("refreshToken")?.Value ?? string.Empty;
             var tenantCustomDomain = context.User.FindFirst("tenantCustomDomain")?.Value ?? string.Empty;
             var tenantDomainName = context.User.FindFirst("tenantDomainName")?.Value ?? string.Empty;
@@ -883,7 +882,7 @@ Authorization: Bearer <access_token_value>
 You can get the access token from your application session in order to set it on the `Authorization` header as follows:
 
 ```csharp
-// You could pull this function into a utils file and use it across your project.
+// You could pull this method into a utils file and use it across your project.
 private static HttpRequestMessage CreateAuthorizedRequest(HttpMethod method, string url, HttpContext context)
 {
     var request = new HttpRequestMessage(method, url);
@@ -942,13 +941,12 @@ builder.Services.AddWristbandAuth(options =>
 | ClientSecret | string | Yes | The client's secret. |
 | CustomApplicationLoginPageUrl | string | No | Custom Application-Level Login Page URL (i.e. Tenant Discovery Page URL). This value only needs to be provided if you are self-hosting the application login page. By default, the SDK will use your Wristband-hosted Application-Level Login page URL. If this value is provided, the SDK will redirect to this URL in certain cases where it cannot resolve a proper Tenant-Level Login URL. |
 | DangerouslyDisableSecureCookies | boolean | No | USE WITH CAUTION: If set to `true`, the "Secure" attribute will not be included in any cookie settings. This should only be done when testing in local development environments that don't have HTTPS enabed.  If not provided, this value defaults to `false`. |
+| IsApplicationCustomDomainActive | boolean | No | Indicates whether your Wristband application is configured with an application-level custom domain that is active. This tells the SDK which URL format to use when constructing the Wristband Authorize Endpoint URL. This has no effect on any tenant custom domains passed to your Login Endpoint either via the `tenant_custom_domain` query parameter or via the `DefaultTenantCustomDomain` config.  Defaults to `false`. |
 | LoginStateSecret | string | Yes | A 32 byte (or longer) secret used for encryption and decryption of login state cookies. You can run `openssl rand -base64 32` to create a secret from your CLI. |
-| LoginUrl | string | Yes | The URL of your application's login endpoint.  This is the endpoint within your application that redirects to Wristband to initialize the login flow. |
-| RedirectUri | string | Yes | The URI that Wristband will redirect to after authenticating a user.  This should point to your application's callback endpoint. |
-| RootDomain | string | Only if using tenant subdomains | The root domain for your application. This value only needs to be specified if you use tenant subdomains in your login and redirect URLs.  The root domain should be set to the portion of the domain following the tenant subdomain.  For example, if your application uses tenant subdomains such as `tenantA.yourapp.com` and `tenantB.yourapp.com`, then the root domain should be set to `yourapp.com`. |
+| LoginUrl | string | Yes | The URL of your application's login endpoint.  This is the endpoint within your application that redirects to Wristband to initialize the login flow. If you intend to use tenant subdomains in your Login Endpoint URL, then this value must contain the `{tenant_domain}` token. For example: `https://{tenant_domain}.yourapp.com/auth/login`. |
+| ParseTenantFromRootDomain | string | Only if using tenant subdomains in your application | The root domain for your application. This value only needs to be specified if you intend to use tenant subdomains in your Login and Callback Endpoint URLs.  The root domain should be set to the portion of the domain that comes after the tenant subdomain.  For example, if your application uses tenant subdomains such as `tenantA.yourapp.com` and `tenantB.yourapp.com`, then the root domain should be set to `yourapp.com`. This has no effect on any tenant custom domains passed to your Login Endpoint either via the `tenant_custom_domain` query parameter or via the `defaultTenantCustomDomain` config. When this configuration is enabled, the SDK extracts the tenant subdomain from the host and uses it to construct the Wristband Authorize URL. |
+| RedirectUri | string | Yes | The URI that Wristband will redirect to after authenticating a user.  This should point to your application's callback endpoint. If you intend to use tenant subdomains in your Callback Endpoint URL, then this value must contain the `{tenant_domain}` token. For example: `https://{tenant_domain}.yourapp.com/auth/callback`. |
 | Scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`. |
-| UseCustomDomains | boolean | No | Indicates whether your Wristband application is configured to use custom domains. Defaults to `false`. |
-| UseTenantSubdomains | boolean | No | Indicates whether tenant subdomains are used for your application's authentication endpoints (e.g. login and callback). Defaults to `false`. |
 | WristbandApplicationVanityDomain | string | Yes | The vanity domain of the Wristband application. |
 
 
@@ -973,7 +971,7 @@ return Results.Redirect(wristbandAuthorizeUrl);
 
 Wristband requires that your application specify a Tenant-Level domain when redirecting to the Wristband Authorize Endpoint when initiating an auth request. When the frontend of your application redirects the user to your Login Endpoint, there are two ways to accomplish getting the `TenantDomainName` information: passing a query parameter or using tenant subdomains.
 
-The `Login()` function can also take optional configuration if your application needs custom behavior:
+The `Login()` method can also take optional configuration if your application needs custom behavior:
 
 | LoginConfig Field | Type | Required | Description |
 | ----------------- | ---- | -------- | ----------- |
@@ -982,6 +980,7 @@ The `Login()` function can also take optional configuration if your application 
 | DefaultTenantCustomDomain | string | No | An optional default tenant custom domain to use for the login request in the event the tenant custom domain cannot be found in the query parameters. |
 
 #### Which Domains Are Used in the Authorize URL?
+
 Wristband supports various tenant domain configurations, including subdomains and custom domains. The SDK automatically determines the appropriate domain configuration when constructing the Wristband Authorize URL, which your login endpoint will redirect users to during the login flow. The selection follows this precedence order:
 
 1. `tenant_custom_domain` request query parameter: If provided, this takes top priority.
@@ -990,7 +989,7 @@ Wristband supports various tenant domain configurations, including subdomains an
 4. `DefaultTenantCustomDomain` in LoginConfig: Used if none of the above are present.
 5. `DefaultTenantDomain` in LoginConfig: Used as the final fallback.
 
-If none of these are specified, the SDK redirects users to the Application-Level Login (Tenant Discovery) Page.
+If none of these are specified, the SDK returns the URL for the Application-Level Login (Tenant Discovery) Page.
 
 #### Tenant Domain Query Param
 
@@ -1032,15 +1031,14 @@ builder.Services.AddWristbandAuth(options =>
     options.LoginStateSecret = "7ffdbecc-ab7d-4134-9307-2dfcc52f7475";
     options.LoginUrl = "https://{tenant_domain}.yourapp.io/auth/login";
     options.RedirectUri = "https://{tenant_domain}.yourapp.io/auth/callback";
-    options.RootDomain = "yourapp.io";
-    options.UseTenantSubdomains = true;
+    options.ParseTenantFromRootDomain = "yourapp.io";
     options.WristbandApplicationVanityDomain = "yourapp-yourcompany.us.wristband.dev";
 });
 ```
 
 #### Default Tenant Domain Name
 
-For certain use cases, it may be useful to specify a default tenant domain in the event that the `login()` function cannot find a tenant domain in either the query parameters or in the URL subdomain. You can specify a fallback default tenant domain via a `LoginConfig` object:
+For certain use cases, it may be useful to specify a default tenant domain in the event that the `Login()` method cannot find a tenant domain in either the query parameters or in the URL subdomain. You can specify a fallback default tenant domain via a `LoginConfig` object:
 
 ```csharp
 var loginConfig = new LoginConfig
@@ -1126,7 +1124,7 @@ After a user authenticates on the Tenant-Level Login Page, Wristband will redire
 GET https://customer01.yourapp.io/auth/callback?state=f983yr893hf89ewn0idjw8e9f&code=shcsh90jf9wc09j9w0jewc
 ```
 
-The SDK will validate that the incoming state matches the Login State Cookie, and then it will call the Wristband Token Endpoint to exchange the authorizaiton code for JWTs. Lastly, it will call the Wristband Userinfo Endpoint to get any user data as specified by the `scopes` in your SDK configuration. The return type of the callback function is a `CallbackResult` object containing the result of what happened during callback execution as well as any accompanying data:
+The SDK will validate that the incoming state matches the Login State Cookie, and then it will call the Wristband Token Endpoint to exchange the authorizaiton code for JWTs. Lastly, it will call the Wristband Userinfo Endpoint to get any user data as specified by the `scopes` in your SDK configuration. The return type of the callback method is a `CallbackResult` object containing the result of what happened during callback execution as well as any accompanying data:
 
 | CallbackResult Field | Type | Description |
 | -------------------- | ---- | ----------- |
@@ -1224,13 +1222,16 @@ If your application created a session, it should destroy it before invoking the 
 | TenantDomainName | string | No | The domain name of the tenant the user belongs to. |
 
 #### Which Domains Are Used in the Logout URL?
+
 Wristband supports various tenant domain configurations, including subdomains and custom domains. The SDK automatically determines the appropriate domain configuration when constructing the Wristband Logout URL, which your Logout Endpoint will redirect users to during the logout flow. The selection follows this precedence order:
 
 1. `TenantCustomDomain` in LogoutConfig: If provided, this takes top priority.
-2. Tenant subdomain in the URL: Used if subdomains are enabled and the subdomain is present.
-3. `TenantDomainName` in LogoutConfig: Used as the final fallback.
+2. `TenantDomainName` in LogoutConfig: This takes the next priority if `TenantCustomDomain` is not present.
+3. `tenant_custom_domain` query parameter: Evaluated if present and there is also no LogoutConfig provided for either `TenantCustomDomain` or `TenantDomainName`.
+4. Tenant subdomain in the URL: Used if none of the above are present, and `ParseTenantFromRootDomain` is specified, and the subdomain is present in the host.
+5. `tenant_domain` query parameter: Used as the final fallback.
 
-If none of these are specified, the SDK redirects users to the Application-Level Login (Tenant Discovery) Page.
+If none of these are specified, the SDK returns the URL for the Application-Level Login (Tenant Discovery) Page.
 
 #### Revoking Refresh Tokens
 
@@ -1238,21 +1239,35 @@ If your application requested refresh tokens during the Login Workflow (via the 
 
 #### Resolving Tenant Domain Names
 
-Much like the Login Endpoint, Wristband requires your application specify a Tenant-Level domain when redirecting to the [Wristband Logout Endpoint](https://docs.wristband.dev/reference/logoutv1). If your application does not utilize tenant subdomains, then you will need to explicitly pass it into the LogoutConfig.
+Much like the Login Endpoint, Wristband requires your application specify a Tenant-Level domain when redirecting to the [Wristband Logout Endpoint](https://docs.wristband.dev/reference/logoutv1). If your application does not utilize tenant subdomains, then you will need to explicitly pass it into the LogoutConfig:
 
 ```csharp
 var logoutConfig = new LogoutConfig
 {
     RefreshToken = "98yht308hf902hc90wh09",
+    TenantDomainName = 'customer01'
 };
 var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, logoutConfig);
 ```
 
-If your application uses tenant subdomains, then passing the `TenantDomainName` field to the LogoutConfig is not required since the SDK will automatically parse the subdomain from the URL.
+...or you can alternatively pass the `tenant_domain` query parameter in your redirect request to your Logout Endpoint:
+
+```csharp
+//
+// Logout Request URL -> "https://yourapp.io/auth/logout?client_id=123&tenant_domain=customer01"
+//
+var logoutConfig = new LogoutConfig
+{
+    RefreshToken = "98yht308hf902hc90wh09"
+};
+var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, logoutConfig);
+```
+
+If your application uses tenant subdomains, then passing the `TenantDomainName` field to the LogoutConfig is not required since the SDK will automatically parse the subdomain from the URL as long as the `ParseTenantFromRootDomain` SDK config is set.
 
 #### Tenant Custom Domains
 
-If you have a tenant that relies on a tenant custom domain, then you will need to explicitly pass it into the LogoutConfig.
+If you have a tenant that relies on a tenant custom domain, then you can either explicitly pass it into the LogoutConfig:
 
 ```csharp
 var logoutConfig = new LogoutConfig
@@ -1263,17 +1278,20 @@ var logoutConfig = new LogoutConfig
 var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, logoutConfig);
 ```
 
-If your application supports a mixture of tenants that use tenant subdomains and tenant custom domains, then passing both the `TenantDomainName` and `TenantCustomDomain` fields to the LogoutConfig is necessary to ensure all use cases are handled by the SDK.
+...or you can alternatively pass the `tenant_custom_domain` query parameter in your redirect request to your Logout Endpoint:
 
 ```csharp
+//
+// Logout Request URL -> "https://yourapp.io/auth/logout?client_id=123&tenant_custom_domain=customer01.com"
+//
 var logoutConfig = new LogoutConfig
 {
-    RefreshToken = "98yht308hf902hc90wh09",
-    TenantCustomDomain = "mytenant.com",
-    TenantDomainName = "customer01"
+    RefreshToken = "98yht308hf902hc90wh09"
 };
 var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, logoutConfig);
 ```
+
+If your application supports a mixture of tenants that use tenant subdomains and tenant custom domains, then you should consider passing both the tenant domain names and tenant custom domains (either via LogoutConfig or by query parameters) to ensure all use cases are handled by the SDK.
 
 #### Custom Logout Redirect URL
 
