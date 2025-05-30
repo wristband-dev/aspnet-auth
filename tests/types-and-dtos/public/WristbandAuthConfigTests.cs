@@ -14,12 +14,11 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Null(config.RedirectUri);
             Assert.Null(config.WristbandApplicationVanityDomain);
             Assert.Null(config.CustomApplicationLoginPageUrl);
-            Assert.Null(config.RootDomain);
+            Assert.Null(config.ParseTenantFromRootDomain);
             Assert.NotNull(config.Scopes);
             Assert.Empty(config.Scopes);
             Assert.False(config.DangerouslyDisableSecureCookies);
-            Assert.False(config.UseCustomDomains);
-            Assert.False(config.UseTenantSubdomains);
+            Assert.False(config.IsApplicationCustomDomainActive);
         }
 
         [Fact]
@@ -35,8 +34,7 @@ namespace Wristband.AspNet.Auth.Tests
             var dangerouslyDisableSecureCookies = true;
             var rootDomain = "example.com";
             var scopes = new List<string> { "openid", "profile", "email" };
-            var useCustomDomains = true;
-            var useTenantSubdomains = true;
+            var isApplicationCustomDomainActive = true;
 
             var config = new WristbandAuthConfig(
                 clientId,
@@ -49,8 +47,7 @@ namespace Wristband.AspNet.Auth.Tests
                 dangerouslyDisableSecureCookies,
                 rootDomain,
                 scopes,
-                useCustomDomains,
-                useTenantSubdomains
+                isApplicationCustomDomainActive
             );
 
             Assert.Equal(clientId, config.ClientId);
@@ -60,18 +57,17 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal(redirectUri, config.RedirectUri);
             Assert.Equal(wristbandApplicationDomain, config.WristbandApplicationVanityDomain);
             Assert.Equal(customApplicationLoginPageUrl, config.CustomApplicationLoginPageUrl);
-            Assert.Equal(rootDomain, config.RootDomain);
+            Assert.Equal(rootDomain, config.ParseTenantFromRootDomain);
             Assert.NotNull(config.Scopes);
             Assert.Equal(scopes, config.Scopes);
             Assert.True(config.DangerouslyDisableSecureCookies);
-            Assert.True(config.UseCustomDomains);
-            Assert.True(config.UseTenantSubdomains);
+            Assert.True(config.IsApplicationCustomDomainActive);
         }
 
         [Fact]
         public void Constructor_WithNullValues_ShouldSetPropertiesToNullOrDefaults()
         {
-            var config = new WristbandAuthConfig(null, null, null, null, null, null, null, null, null, null, null, null);
+            var config = new WristbandAuthConfig(null, null, null, null, null, null, null, null, null, null, null);
 
             Assert.Null(config.ClientId);
             Assert.Null(config.ClientSecret);
@@ -80,11 +76,10 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Null(config.RedirectUri);
             Assert.Null(config.WristbandApplicationVanityDomain);
             Assert.Null(config.CustomApplicationLoginPageUrl);
-            Assert.Null(config.RootDomain);
+            Assert.Null(config.ParseTenantFromRootDomain);
             Assert.Null(config.Scopes);
             Assert.Null(config.DangerouslyDisableSecureCookies);
-            Assert.Null(config.UseCustomDomains);
-            Assert.Null(config.UseTenantSubdomains);
+            Assert.Null(config.IsApplicationCustomDomainActive);
         }
 
         [Fact]
@@ -100,10 +95,9 @@ namespace Wristband.AspNet.Auth.Tests
             config.WristbandApplicationVanityDomain = "updated-wristband.example.com";
             config.CustomApplicationLoginPageUrl = "https://updated-custom-login.example.com";
             config.DangerouslyDisableSecureCookies = true;
-            config.RootDomain = "updated-example.com";
+            config.ParseTenantFromRootDomain = "updated-example.com";
             config.Scopes = new List<string> { "custom-scope" };
-            config.UseCustomDomains = true;
-            config.UseTenantSubdomains = true;
+            config.IsApplicationCustomDomainActive = true;
 
             Assert.Equal("updated-client-id", config.ClientId);
             Assert.Equal("updated-client-secret", config.ClientSecret);
@@ -112,13 +106,12 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://updated.example.com/callback", config.RedirectUri);
             Assert.Equal("updated-wristband.example.com", config.WristbandApplicationVanityDomain);
             Assert.Equal("https://updated-custom-login.example.com", config.CustomApplicationLoginPageUrl);
-            Assert.Equal("updated-example.com", config.RootDomain);
+            Assert.Equal("updated-example.com", config.ParseTenantFromRootDomain);
             Assert.NotNull(config.Scopes);
             Assert.Single(config.Scopes);
             Assert.Equal("custom-scope", config.Scopes[0]);
             Assert.True(config.DangerouslyDisableSecureCookies);
-            Assert.True(config.UseCustomDomains);
-            Assert.True(config.UseTenantSubdomains);
+            Assert.True(config.IsApplicationCustomDomainActive);
         }
     }
 }

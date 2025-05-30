@@ -23,10 +23,9 @@ public class WristbandAuthConfig
     /// <param name="wristbandApplicationVanityDomain">The vanity domain of the Wristband application.</param>
     /// <param name="customApplicationLoginPageUrl">Custom application login (tenant discovery) page URL if self-hosting the application login/tenant discovery UI.</param>
     /// <param name="dangerouslyDisableSecureCookies">If set to true, the "Secure" attribute will not be included in any cookie settings. Should be used only in local development.</param>
-    /// <param name="rootDomain">The root domain for your application.</param>
+    /// <param name="parseTenantFromRootDomain">The root domain for your application.</param>
     /// <param name="scopes">The scopes required for authentication.</param>
-    /// <param name="useCustomDomains">Indicates whether custom domains are used for authentication.</param>
-    /// <param name="useTenantSubdomains">Indicates whether tenant subdomains are used for authentication.</param>
+    /// <param name="isApplicationCustomDomainActive">Indicates whether an application-level custom domain is active for the Wristband application.</param>
     public WristbandAuthConfig(
         string? clientId,
         string? clientSecret,
@@ -36,10 +35,9 @@ public class WristbandAuthConfig
         string? wristbandApplicationVanityDomain,
         string? customApplicationLoginPageUrl,
         bool? dangerouslyDisableSecureCookies,
-        string? rootDomain,
+        string? parseTenantFromRootDomain,
         List<string>? scopes,
-        bool? useCustomDomains,
-        bool? useTenantSubdomains)
+        bool? isApplicationCustomDomainActive)
     {
         ClientId = clientId;
         ClientSecret = clientSecret;
@@ -49,10 +47,9 @@ public class WristbandAuthConfig
         WristbandApplicationVanityDomain = wristbandApplicationVanityDomain;
         CustomApplicationLoginPageUrl = customApplicationLoginPageUrl;
         DangerouslyDisableSecureCookies = dangerouslyDisableSecureCookies;
-        RootDomain = rootDomain;
+        ParseTenantFromRootDomain = parseTenantFromRootDomain;
         Scopes = scopes;
-        UseCustomDomains = useCustomDomains;
-        UseTenantSubdomains = useTenantSubdomains;
+        IsApplicationCustomDomainActive = isApplicationCustomDomainActive;
     }
 
     /// <summary>
@@ -93,7 +90,7 @@ public class WristbandAuthConfig
     /// <summary>
     /// Gets or sets the root domain for your application.
     /// </summary>
-    public string? RootDomain { get; set; }
+    public string? ParseTenantFromRootDomain { get; set; }
 
     /// <summary>
     /// Gets or sets the list of scopes required for authentication.
@@ -101,14 +98,9 @@ public class WristbandAuthConfig
     public List<string>? Scopes { get; set; } = new List<string>();
 
     /// <summary>
-    /// Gets or sets whether custom domains are used for authentication.
+    /// Gets or sets whether an application-level custom domain is active for the Wristband application.
     /// </summary>
-    public bool? UseCustomDomains { get; set; } = false;
-
-    /// <summary>
-    /// Gets or sets whether tenant subdomains are used for authentication.
-    /// </summary>
-    public bool? UseTenantSubdomains { get; set; } = false;
+    public bool? IsApplicationCustomDomainActive { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the vanity domain of the Wristband application.

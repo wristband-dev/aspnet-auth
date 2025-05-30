@@ -15,8 +15,6 @@ public class WristbandAuthServiceFactoryTests
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
             WristbandApplicationVanityDomain = "example.com",
-            RootDomain = "example.com",
-            UseTenantSubdomains = false
         });
     }
 

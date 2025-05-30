@@ -218,8 +218,7 @@ public class CallbackTests
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            UseTenantSubdomains = true,
-            RootDomain = "example.com"
+            ParseTenantFromRootDomain = "example.com"
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext(

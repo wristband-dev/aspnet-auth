@@ -42,8 +42,7 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            UseCustomDomains = false,
-            UseTenantSubdomains = false,
+            IsApplicationCustomDomainActive = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
@@ -86,8 +85,7 @@ public class LoginTests
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            UseTenantSubdomains = true,
-            RootDomain = "example.com"
+            ParseTenantFromRootDomain = "example.com"
         };
         var service = SetupWristbandAuthService(config);
         var customDomain = "tenant.custom.com";
@@ -112,8 +110,7 @@ public class LoginTests
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            UseTenantSubdomains = true,
-            RootDomain = "example.com"
+            ParseTenantFromRootDomain = "example.com"
         };
         var service = SetupWristbandAuthService(config);
 
@@ -138,8 +135,7 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            UseTenantSubdomains = false,
-            UseCustomDomains = false
+            IsApplicationCustomDomainActive = false
         };
         var service = SetupWristbandAuthService(config);
         var tenantDomain = "mytenant";
@@ -197,7 +193,7 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            UseCustomDomains = true
+            IsApplicationCustomDomainActive = true
         };
         var service = SetupWristbandAuthService(config);
         var tenantDomain = "tenant1";
