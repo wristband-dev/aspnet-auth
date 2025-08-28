@@ -104,7 +104,7 @@ You should see the dependency added to your `.csproj` file:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Wristband.AspNet.Auth" Version="2.0.0" />
+  <PackageReference Include="Wristband.AspNet.Auth" Version="2.1.0" />
 </ItemGroup>
 ```
 
@@ -434,8 +434,7 @@ public static class AuthRoutes
                 new("isAuthenticated", "true"),
                 new("accessToken", callbackData.AccessToken),
                 new("refreshToken", callbackData.RefreshToken ?? string.Empty),
-                // Convert expiration seconds to a Unix timestamp in milliseconds.
-                new("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (callbackData.ExpiresIn * 1000)}"),
+                new("expiresAt", callbackData.ExpiresAt),
 
                 // Domain-related claims
                 new("tenantDomainName", callbackData.TenantDomainName),
@@ -505,8 +504,7 @@ public static class AuthRoutes
                 new("isAuthenticated", "true"),
                 new("accessToken", callbackData.AccessToken),
                 new("refreshToken", callbackData.RefreshToken ?? string.Empty),
-                // Convert expiration seconds to a Unix timestamp in milliseconds.
-                new("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (callbackData.ExpiresIn * 1000)}"),
+                new("expiresAt", callbackData.ExpiresAt),
 
                 // Domain-related claims
                 new("tenantDomainName", callbackData.TenantDomainName),
@@ -733,7 +731,7 @@ public class AuthMiddleware
                     {
                         new Claim("accessToken", tokenData.AccessToken),
                         new Claim("refreshToken", tokenData.RefreshToken ?? string.Empty),
-                        new Claim("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (tokenData.ExpiresIn * 1000)}")
+                        new Claim("expiresAt", tokenData.ExpiresAt),
                     });
             }
 
@@ -806,7 +804,7 @@ public class AuthMiddleware
                     {
                         new Claim("accessToken", tokenData.AccessToken),
                         new Claim("refreshToken", tokenData.RefreshToken ?? string.Empty),
-                        new Claim("expiresAt", $"{DateTimeOffset.Now.ToUnixTimeMilliseconds() + (tokenData.ExpiresIn * 1000)}")
+                        new Claim("expiresAt", tokenData.ExpiresAt)
                     });
             }
 
@@ -947,6 +945,7 @@ builder.Services.AddWristbandAuth(options =>
 | ParseTenantFromRootDomain | string | Only if using tenant subdomains in your application | The root domain for your application. This value only needs to be specified if you intend to use tenant subdomains in your Login and Callback Endpoint URLs.  The root domain should be set to the portion of the domain that comes after the tenant subdomain.  For example, if your application uses tenant subdomains such as `tenantA.yourapp.com` and `tenantB.yourapp.com`, then the root domain should be set to `yourapp.com`. This has no effect on any tenant custom domains passed to your Login Endpoint either via the `tenant_custom_domain` query parameter or via the `defaultTenantCustomDomain` config. When this configuration is enabled, the SDK extracts the tenant subdomain from the host and uses it to construct the Wristband Authorize URL. |
 | RedirectUri | string | Yes | The URI that Wristband will redirect to after authenticating a user.  This should point to your application's callback endpoint. If you intend to use tenant subdomains in your Callback Endpoint URL, then this value must contain the `{tenant_domain}` token. For example: `https://{tenant_domain}.yourapp.com/auth/callback`. |
 | Scopes | string[] | No | The scopes required for authentication. Refer to the docs for [currently supported scopes](https://docs.wristband.dev/docs/oauth2-and-openid-connect-oidc#supported-openid-scopes). The default value is `[openid, offline_access, email]`. |
+| TokenExpirationBuffer | int | No | Buffer time (in seconds) to subtract from the access token’s expiration time. This causes the token to be treated as expired before its actual expiration, helping to avoid token expiration during API calls. Defaults to 60 seconds. |
 | WristbandApplicationVanityDomain | string | Yes | The vanity domain of the Wristband application. |
 
 
@@ -1146,7 +1145,8 @@ When the callback returns a `COMPLETED` result, all of the token and userinfo da
 | ------------------ | ---- | ----------- |
 | AccessToken | string | The access token that can be used for accessing Wristband APIs as well as protecting your application's backend APIs. |
 | CustomState | Dictionary<string, object>? | If you injected custom state into the Login State Cookie during the Login Endpoint for the current auth request, then that same custom state will be returned in this field. |
-| ExpiresIn | number | The durtaion from the current time until the access token is expired (in seconds). |
+| ExpiresAt | long | The absolute expiration time of the access token in milliseconds since the Unix epoch. The `TokenExpirationBuffer` SDK configuration is accounted for in this value. |
+| ExpiresIn | int | The durtaion from the current time until the access token is expired (in seconds). The `TokenExpirationBuffer` SDK configuration is accounted for in this value. |
 | IdToken | string | The ID token uniquely identifies the user that is authenticating and contains claim data about the user. |
 | RefreshToken | string? | The refresh token that renews expired access tokens with Wristband, maintaining continuous access to services. |
 | ReturnUrl | string? | The URL to return to after authentication is completed. |
@@ -1316,10 +1316,20 @@ If your application is using access tokens generated by Wristband either to make
 
 | Argument | Type | Required | Description |
 | -------- | ---- | -------- | ----------- |
-| ExpiresAt | number | Yes | Unix timestamp in milliseconds at which the token expires. |
+| ExpiresAt | long | Yes | Unix timestamp in milliseconds at which the token expires. |
 | RefreshToken | string | Yes | The refresh token used to send to Wristband when access tokens expire in order to receive new tokens. |
 
 If the `RefreshTokenIfExpired()` method finds that your token has not expired yet, it will return `null` as the value, which means your auth middleware can simply continue forward as usual.
+
+The `TokenData` is defined as follows:
+
+| TokenData Field | Type | Description |
+| --------------- | ---- | ----------- |
+| AccessToken | string | The access token that can be used for accessing Wristband APIs as well as protecting your application's backend APIs. |
+| ExpiresAt | long | The absolute expiration time of the access token in milliseconds since the Unix epoch. The `TokenExpirationBuffer` SDK configuration is accounted for in this value. |
+| ExpiresIn | int | The durtaion from the current time until the access token is expired (in seconds). The `TokenExpirationBuffer` SDK configuration is accounted for in this value. |
+| IdToken | string | The ID token uniquely identifies the user that is authenticating and contains claim data about the user. |
+| RefreshToken | string? | The refresh token that renews expired access tokens with Wristband, maintaining continuous access to services. |
 
 <br>
 

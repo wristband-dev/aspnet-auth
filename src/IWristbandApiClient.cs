@@ -27,9 +27,9 @@ internal interface IWristbandApiClient
     /// Calls the Wristband Token Endpoint with the refresh token grant type to refresh an expired access token.
     /// </summary>
     /// <param name="refreshToken">The refresh token used to obtain a new access token.</param>
-    /// <returns>A <see cref="Task{TokenData}"/> representing the asynchronous operation. The result contains the refreshed access token, id token, and refresh token.</returns>
+    /// <returns>A <see cref="Task{TokenResponse}"/> representing the asynchronous operation. The result contains the refreshed access token, id token, and refresh token.</returns>
     /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
-    Task<TokenData> RefreshToken(string refreshToken);
+    Task<TokenResponse> RefreshToken(string refreshToken);
 
     /// <summary>
     /// Calls the Wristband Revoke Token Endpoint to revoke a refresh token.

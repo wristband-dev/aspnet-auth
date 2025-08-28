@@ -85,11 +85,18 @@ public class RefreshTokenIfExpiredTests
     [Fact]
     public async Task RefreshTokenIfExpired_Should_RefreshToken_When_AccessTokenExpired()
     {
-        var expectedTokenData = new TokenData("newAccessToken", 3600, "newIdToken", "newRefreshToken");
+        // Create expected token response using property initialization
+        var expectedTokenResponse = new TokenResponse
+        {
+            AccessToken = "newAccessToken",
+            ExpiresIn = 3600,
+            IdToken = "newIdToken",
+            RefreshToken = "newRefreshToken"
+        };
 
         _mockApiClient
             .Setup(m => m.RefreshToken("validRefreshToken"))
-            .ReturnsAsync(expectedTokenData);
+            .ReturnsAsync(expectedTokenResponse);
 
         var dateTime = DateTime.UtcNow.AddMinutes(-5);
         var msSinceEpoch = new DateTimeOffset(dateTime).ToUnixTimeMilliseconds();
@@ -98,7 +105,8 @@ public class RefreshTokenIfExpiredTests
 
         Assert.NotNull(result);
         Assert.Equal("newAccessToken", result.AccessToken);
-        Assert.Equal(3600, result.ExpiresIn);
+        Assert.True(result.ExpiresAt > 0); // Should be set by the service logic
+        Assert.Equal(3540, result.ExpiresIn); // 3600 - 60 (token expiration buffer)
         Assert.Equal("newIdToken", result.IdToken);
         Assert.Equal("newRefreshToken", result.RefreshToken);
     }
@@ -140,11 +148,17 @@ public class RefreshTokenIfExpiredTests
     [Fact]
     public async Task RefreshTokenIfExpired_ServerError_RetryAndSucceed()
     {
-        // Setup to fail with 500 once, then succeed
+        // Setup to fail with error once, then succeed
         _mockApiClient
             .SetupSequence(m => m.RefreshToken("validRefreshToken"))
             .ThrowsAsync(new WristbandError("unexpected_error", "Unexpected Error"))
-            .ReturnsAsync(new TokenData("newAccessToken", 3600, "newIdToken", "newRefreshToken"));
+            .ReturnsAsync(new TokenResponse
+            {
+                AccessToken = "newAccessToken",
+                ExpiresIn = 3600,
+                IdToken = "newIdToken",
+                RefreshToken = "newRefreshToken"
+            });
 
         var dateTime = DateTime.UtcNow.AddMinutes(-5);
         var msSinceEpoch = new DateTimeOffset(dateTime).ToUnixTimeMilliseconds();
@@ -153,7 +167,8 @@ public class RefreshTokenIfExpiredTests
 
         Assert.NotNull(result);
         Assert.Equal("newAccessToken", result.AccessToken);
-        Assert.Equal(3600, result.ExpiresIn);
+        Assert.True(result.ExpiresAt > 0);
+        Assert.Equal(3540, result.ExpiresIn); // 3600 - 60 (token expiration buffer)
         Assert.Equal("newIdToken", result.IdToken);
         Assert.Equal("newRefreshToken", result.RefreshToken);
     }
@@ -180,5 +195,85 @@ public class RefreshTokenIfExpiredTests
 
         var output = stringWriter.ToString();
         Assert.Contains("Attempt 3 failed. Aborting...", output);
+    }
+
+    [Fact]
+    public async Task RefreshTokenIfExpired_VerifyExpiresAtCalculation()
+    {
+        // Test that ExpiresAt is calculated correctly by the service
+        var mockTokenResponse = new TokenResponse
+        {
+            AccessToken = "accessToken",
+            ExpiresIn = 3600,
+            IdToken = "idToken",
+            RefreshToken = "refreshToken"
+        };
+
+        _mockApiClient
+            .Setup(m => m.RefreshToken("validRefreshToken"))
+            .ReturnsAsync(mockTokenResponse);
+
+        var pastTime = DateTime.UtcNow.AddMinutes(-5);
+        var pastExpiresAt = new DateTimeOffset(pastTime).ToUnixTimeMilliseconds();
+
+        var beforeCall = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var result = await _wristbandAuthService.RefreshTokenIfExpired("validRefreshToken", pastExpiresAt);
+        var afterCall = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+        Assert.NotNull(result);
+
+        // Verify ExpiresAt is calculated correctly (should be close to now + 3540 seconds in milliseconds)
+        var expectedMinExpiresAt = beforeCall + (3540 * 1000);
+        var expectedMaxExpiresAt = afterCall + (3540 * 1000);
+
+        Assert.True(result.ExpiresAt >= expectedMinExpiresAt, $"ExpiresAt {result.ExpiresAt} should be >= {expectedMinExpiresAt}");
+        Assert.True(result.ExpiresAt <= expectedMaxExpiresAt, $"ExpiresAt {result.ExpiresAt} should be <= {expectedMaxExpiresAt}");
+
+        // Verify ExpiresIn accounts for buffer
+        Assert.Equal(3540, result.ExpiresIn); // 3600 - 60 buffer
+    }
+
+    [Fact]
+    public async Task RefreshTokenIfExpired_WithCustomTokenExpirationBuffer()
+    {
+        // Test with a custom token expiration buffer
+        var customConfig = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            DangerouslyDisableSecureCookies = false,
+            LoginStateSecret = new string('a', 32),
+            LoginUrl = "https://example.com/login",
+            RedirectUri = "https://example.com/callback",
+            WristbandApplicationVanityDomain = "example.com",
+            IsApplicationCustomDomainActive = false,
+            TokenExpirationBuffer = 120 // 2 minutes buffer instead of default 60
+        };
+
+        var customService = new WristbandAuthService(customConfig);
+
+        // Inject mock API client
+        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        fieldInfo?.SetValue(customService, _mockApiClient.Object);
+
+        var mockTokenResponse = new TokenResponse
+        {
+            AccessToken = "accessToken",
+            ExpiresIn = 3600,
+            IdToken = "idToken",
+            RefreshToken = "refreshToken"
+        };
+
+        _mockApiClient
+            .Setup(m => m.RefreshToken("validRefreshToken"))
+            .ReturnsAsync(mockTokenResponse);
+
+        var pastTime = DateTime.UtcNow.AddMinutes(-5);
+        var pastExpiresAt = new DateTimeOffset(pastTime).ToUnixTimeMilliseconds();
+
+        var result = await customService.RefreshTokenIfExpired("validRefreshToken", pastExpiresAt);
+
+        Assert.NotNull(result);
+        Assert.Equal(3480, result.ExpiresIn); // 3600 - 120 buffer
     }
 }

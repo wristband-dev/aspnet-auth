@@ -7,6 +7,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
+                expiresAt: DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds(),
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
@@ -21,8 +22,11 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_NullOrEmptyTenantDomainName_ThrowsInvalidOperationException()
         {
+            var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
+
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
+                expiresAt: expiresAt,
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
@@ -35,6 +39,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
+                expiresAt: expiresAt,
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
@@ -51,9 +56,11 @@ namespace Wristband.AspNet.Auth.Tests
         {
             var userinfo = new UserInfo("{\"name\":\"John\"}");
             var customState = new Dictionary<string, object> { { "key", "value" } };
+            var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
 
             var callbackData = new CallbackData(
                 accessToken: "token",
+                expiresAt: expiresAt,
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
@@ -65,6 +72,7 @@ namespace Wristband.AspNet.Auth.Tests
             );
 
             Assert.Equal("token", callbackData.AccessToken);
+            Assert.Equal(expiresAt, callbackData.ExpiresAt);
             Assert.Equal(3600, callbackData.ExpiresIn);
             Assert.Equal("id_token", callbackData.IdToken);
             Assert.Equal("refresh_token", callbackData.RefreshToken);
@@ -78,8 +86,11 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_NullOptionalParameters_SetsDefaults()
         {
+            var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
+
             var callbackData = new CallbackData(
                 accessToken: "token",
+                expiresAt: expiresAt,
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
@@ -90,6 +101,7 @@ namespace Wristband.AspNet.Auth.Tests
                 returnUrl: null
             );
 
+            Assert.Equal(expiresAt, callbackData.ExpiresAt);
             Assert.Null(callbackData.TenantCustomDomain);
             Assert.Null(callbackData.CustomState);
             Assert.Null(callbackData.ReturnUrl);
@@ -101,6 +113,7 @@ namespace Wristband.AspNet.Auth.Tests
             var empty = CallbackData.Empty;
 
             Assert.Equal("empty", empty.AccessToken);
+            Assert.Equal(0, empty.ExpiresAt);
             Assert.Equal(0, empty.ExpiresIn);
             Assert.Equal("empty", empty.IdToken);
             Assert.Null(empty.RefreshToken);
@@ -109,6 +122,78 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Null(empty.TenantCustomDomain);
             Assert.Null(empty.CustomState);
             Assert.Null(empty.ReturnUrl);
+        }
+
+        [Fact]
+        public void Constructor_InheritsTokenDataValidation_NegativeExpiresAt()
+        {
+            // Test that TokenData validation is inherited
+            Assert.Throws<InvalidOperationException>(() => new CallbackData(
+                accessToken: "token",
+                expiresAt: -1,
+                expiresIn: 3600,
+                idToken: "id_token",
+                refreshToken: "refresh_token",
+                userinfo: new UserInfo("{}"),
+                tenantDomainName: "example.com",
+                tenantCustomDomain: null,
+                customState: null,
+                returnUrl: null
+            ));
+        }
+
+        [Fact]
+        public void Constructor_InheritsTokenDataValidation_NegativeExpiresIn()
+        {
+            // Test that TokenData validation is inherited
+            Assert.Throws<InvalidOperationException>(() => new CallbackData(
+                accessToken: "token",
+                expiresAt: DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds(),
+                expiresIn: -1,
+                idToken: "id_token",
+                refreshToken: "refresh_token",
+                userinfo: new UserInfo("{}"),
+                tenantDomainName: "example.com",
+                tenantCustomDomain: null,
+                customState: null,
+                returnUrl: null
+            ));
+        }
+
+        [Fact]
+        public void Constructor_InheritsTokenDataValidation_NullAccessToken()
+        {
+            // Test that TokenData validation is inherited
+            Assert.Throws<InvalidOperationException>(() => new CallbackData(
+                accessToken: null!,
+                expiresAt: DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds(),
+                expiresIn: 3600,
+                idToken: "id_token",
+                refreshToken: "refresh_token",
+                userinfo: new UserInfo("{}"),
+                tenantDomainName: "example.com",
+                tenantCustomDomain: null,
+                customState: null,
+                returnUrl: null
+            ));
+        }
+
+        [Fact]
+        public void Constructor_InheritsTokenDataValidation_NullIdToken()
+        {
+            // Test that TokenData validation is inherited
+            Assert.Throws<InvalidOperationException>(() => new CallbackData(
+                accessToken: "token",
+                expiresAt: DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds(),
+                expiresIn: 3600,
+                idToken: null!,
+                refreshToken: "refresh_token",
+                userinfo: new UserInfo("{}"),
+                tenantDomainName: "example.com",
+                tenantCustomDomain: null,
+                customState: null,
+                returnUrl: null
+            ));
         }
     }
 }
