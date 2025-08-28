@@ -155,7 +155,7 @@ internal class WristbandApiClient : IWristbandApiClient
     /// Implements <see cref="IWristbandApiClient.RefreshToken"/>.
     /// </summary>
     /// <inheritdoc />
-    public async Task<TokenData> RefreshToken(string refreshToken)
+    public async Task<TokenResponse> RefreshToken(string refreshToken)
     {
         var formParams = new Dictionary<string, string>
         {
@@ -188,11 +188,13 @@ internal class WristbandApiClient : IWristbandApiClient
 
             var responseContent = await response.Content.ReadAsStringAsync();
             var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent);
-            return new TokenData(
-                tokenResponse?.AccessToken ?? string.Empty,
-                tokenResponse?.ExpiresIn ?? 0,
-                tokenResponse?.IdToken ?? string.Empty,
-                tokenResponse?.RefreshToken);
+
+            if (tokenResponse == null)
+            {
+                throw new InvalidOperationException("Failed to deserialize token response.");
+            }
+
+            return tokenResponse;
         }
         catch (WristbandError)
         {

@@ -8,7 +8,8 @@ namespace Wristband.AspNet.Auth.Tests;
 
 public class LoginStateHandlerTests
 {
-    private static readonly string TestLoginStateSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+    // Generate a 43-character random string (32 bytes base64url without padding)
+    private static readonly string TestLoginStateSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+', '-').Replace('/', '_').TrimEnd('=');
     private static readonly ILoginStateHandler mLoginStateHandler = new LoginStateHandler();
 
     [Fact]
@@ -162,10 +163,9 @@ public class LoginStateHandlerTests
     }
 
     [Fact]
-    public void DecryptLoginState_WithInvalidSecret_ThrowsArgumentException()
+    public void CreateLoginStateCookie_WithSecretTooShort_ThrowsArgumentException()
     {
-        // Use a valid base64 string that decodes to wrong length
-        var invalidSecret = Convert.ToBase64String(new byte[] { 1, 2, 3 });
+        var httpContext = TestUtils.setupHttpContext("example.com");
         var loginState = new LoginState(
             "state123",
             "verifier123",
@@ -173,11 +173,131 @@ public class LoginStateHandlerTests
             string.Empty,
             null);
 
-        var httpContext = TestUtils.setupHttpContext("example.com");
+        // Secret with only 20 characters (less than required 32)
+        var shortSecret = "abcdefghijklmnopqrst";
 
         var ex = Assert.Throws<ArgumentException>(() =>
-            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, invalidSecret, false));
-        Assert.Contains("Invalid key size", ex.Message);
+            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, shortSecret, false));
+        Assert.Contains("must be at least 32 characters long", ex.Message);
+    }
+
+    [Fact]
+    public void CreateLoginStateCookie_WithEmptySecret_ThrowsArgumentException()
+    {
+        var httpContext = TestUtils.setupHttpContext("example.com");
+        var loginState = new LoginState(
+            "state123",
+            "verifier123",
+            "https://example.com/callback",
+            string.Empty,
+            null);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, "", false));
+        Assert.Contains("must be at least 32 characters long", ex.Message);
+    }
+
+    [Fact]
+    public void CreateLoginStateCookie_WithNullSecret_ThrowsArgumentException()
+    {
+        var httpContext = TestUtils.setupHttpContext("example.com");
+        var loginState = new LoginState(
+            "state123",
+            "verifier123",
+            "https://example.com/callback",
+            string.Empty,
+            null);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, null!, false));
+        Assert.Contains("must be at least 32 characters long", ex.Message);
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithSecretTooShort_ThrowsArgumentException()
+    {
+        var shortSecret = "abcdefghijklmnopqrst";
+        var encryptedState = "someEncryptedValue|someIV";
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            mLoginStateHandler.DecryptLoginState(encryptedState, shortSecret));
+        Assert.Contains("must be at least 32 characters long", ex.Message);
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithEmptySecret_ThrowsArgumentException()
+    {
+        var encryptedState = "someEncryptedValue|someIV";
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            mLoginStateHandler.DecryptLoginState(encryptedState, ""));
+        Assert.Contains("must be at least 32 characters long", ex.Message);
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithNullSecret_ThrowsArgumentException()
+    {
+        var encryptedState = "someEncryptedValue|someIV";
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            mLoginStateHandler.DecryptLoginState(encryptedState, null!));
+        Assert.Contains("must be at least 32 characters long", ex.Message);
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithInvalidEncryptedStateFormat_ThrowsArgumentException()
+    {
+        var invalidEncryptedState = "invalidFormatWithoutPipe";
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            mLoginStateHandler.DecryptLoginState(invalidEncryptedState, TestLoginStateSecret));
+        Assert.Contains("Invalid encrypted state format", ex.Message);
+    }
+
+    [Fact]
+    public void CreateLoginStateCookie_WithExactly32CharSecret_Works()
+    {
+        var httpContext = TestUtils.setupHttpContext("example.com");
+        var loginState = new LoginState(
+            "state123",
+            "verifier123",
+            "https://example.com/callback",
+            string.Empty,
+            null);
+
+        // Exactly 32 characters
+        var exactSecret = "abcdefghijklmnopqrstuvwxyz123456";
+        Assert.Equal(32, exactSecret.Length);
+
+        // Should not throw
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, exactSecret, false);
+
+        var cookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie");
+        var loginStateCookie = cookies.Single(c => c.StartsWith("login#state123#"));
+        Assert.NotNull(loginStateCookie);
+    }
+
+    [Fact]
+    public void CreateLoginStateCookie_WithLongSecret_Works()
+    {
+        var httpContext = TestUtils.setupHttpContext("example.com");
+        var loginState = new LoginState(
+            "state123",
+            "verifier123",
+            "https://example.com/callback",
+            string.Empty,
+            null);
+
+        // Much longer than 32 characters
+        var longSecret = "abcdefghijklmnopqrstuvwxyz123456789012345678901234567890";
+        Assert.True(longSecret.Length > 32);
+
+        // Should work fine - uses SHA256 to derive 32-byte key
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, longSecret, false);
+
+        var cookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie");
+        var loginStateCookie = cookies.Single(c => c.StartsWith("login#state123#"));
+        Assert.NotNull(loginStateCookie);
     }
 
     [Fact]

@@ -126,15 +126,23 @@ internal class LoginStateHandler : ILoginStateHandler
     /// <inheritdoc />
     public LoginState DecryptLoginState(string encryptedState, string loginStateSecret)
     {
+        if (string.IsNullOrEmpty(loginStateSecret) || loginStateSecret.Length < 32)
+        {
+            throw new ArgumentException("Login state secret must be at least 32 characters long");
+        }
+
         var parts = encryptedState.Split(new[] { '|' }, 2);
+        if (parts.Length != 2)
+        {
+            throw new ArgumentException("Invalid encrypted state format");
+        }
+
         var encrypted = Convert.FromBase64String(parts[0]);
         var iv = Convert.FromBase64String(parts[1]);
 
-        var key = Convert.FromBase64String(loginStateSecret);
-        if (key.Length != 32)
-        {
-            throw new ArgumentException("Invalid key size. Must be 32 bytes for AES-256.");
-        }
+        // Derive the same 32-byte key using SHA256 (same as encryption)
+        using var sha256 = SHA256.Create();
+        var key = sha256.ComputeHash(Encoding.UTF8.GetBytes(loginStateSecret));
 
         using var aes = Aes.Create();
         aes.Key = key;
@@ -209,14 +217,16 @@ internal class LoginStateHandler : ILoginStateHandler
         }
     }
 
-    // NOTE: Create LoginStateSecret via `openssl rand -base64 32`
     private string EncryptLoginState(LoginState loginState, string loginStateSecret)
     {
-        var key = Convert.FromBase64String(loginStateSecret);
-        if (key.Length != 32)
+        if (string.IsNullOrEmpty(loginStateSecret) || loginStateSecret.Length < 32)
         {
-            throw new ArgumentException("Invalid key size. Must be 32 bytes for AES-256.");
+            throw new ArgumentException("Login state secret must be at least 32 characters long");
         }
+
+        // Derive 32-byte key (256 bits) using SHA256
+        using var sha256 = SHA256.Create();
+        var key = sha256.ComputeHash(Encoding.UTF8.GetBytes(loginStateSecret));
 
         using var aes = Aes.Create();
         aes.Key = key;

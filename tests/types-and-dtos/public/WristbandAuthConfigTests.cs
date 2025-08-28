@@ -19,6 +19,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Empty(config.Scopes);
             Assert.False(config.DangerouslyDisableSecureCookies);
             Assert.False(config.IsApplicationCustomDomainActive);
+            Assert.Equal(60, config.TokenExpirationBuffer);
         }
 
         [Fact]
@@ -35,6 +36,7 @@ namespace Wristband.AspNet.Auth.Tests
             var rootDomain = "example.com";
             var scopes = new List<string> { "openid", "profile", "email" };
             var isApplicationCustomDomainActive = true;
+            var tokenExpirationBuffer = 120;
 
             var config = new WristbandAuthConfig(
                 clientId,
@@ -47,7 +49,8 @@ namespace Wristband.AspNet.Auth.Tests
                 dangerouslyDisableSecureCookies,
                 rootDomain,
                 scopes,
-                isApplicationCustomDomainActive
+                isApplicationCustomDomainActive,
+                tokenExpirationBuffer
             );
 
             Assert.Equal(clientId, config.ClientId);
@@ -62,12 +65,13 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal(scopes, config.Scopes);
             Assert.True(config.DangerouslyDisableSecureCookies);
             Assert.True(config.IsApplicationCustomDomainActive);
+            Assert.Equal(tokenExpirationBuffer, config.TokenExpirationBuffer);
         }
 
         [Fact]
         public void Constructor_WithNullValues_ShouldSetPropertiesToNullOrDefaults()
         {
-            var config = new WristbandAuthConfig(null, null, null, null, null, null, null, null, null, null, null);
+            var config = new WristbandAuthConfig(null, null, null, null, null, null, null, null, null, null, null, null);
 
             Assert.Null(config.ClientId);
             Assert.Null(config.ClientSecret);
@@ -80,6 +84,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Null(config.Scopes);
             Assert.Null(config.DangerouslyDisableSecureCookies);
             Assert.Null(config.IsApplicationCustomDomainActive);
+            Assert.Null(config.TokenExpirationBuffer);
         }
 
         [Fact]
@@ -98,6 +103,7 @@ namespace Wristband.AspNet.Auth.Tests
             config.ParseTenantFromRootDomain = "updated-example.com";
             config.Scopes = new List<string> { "custom-scope" };
             config.IsApplicationCustomDomainActive = true;
+            config.TokenExpirationBuffer = 90;
 
             Assert.Equal("updated-client-id", config.ClientId);
             Assert.Equal("updated-client-secret", config.ClientSecret);
@@ -112,6 +118,60 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("custom-scope", config.Scopes[0]);
             Assert.True(config.DangerouslyDisableSecureCookies);
             Assert.True(config.IsApplicationCustomDomainActive);
+            Assert.Equal(90, config.TokenExpirationBuffer);
+        }
+
+        [Fact]
+        public void Constructor_WithSpecificTokenExpirationBuffer_ShouldSetValue()
+        {
+            var tokenExpirationBuffer = 300;
+
+            var config = new WristbandAuthConfig(
+                clientId: null,
+                clientSecret: null,
+                loginStateSecret: null,
+                loginUrl: null,
+                redirectUri: null,
+                wristbandApplicationVanityDomain: null,
+                customApplicationLoginPageUrl: null,
+                dangerouslyDisableSecureCookies: null,
+                parseTenantFromRootDomain: null,
+                scopes: null,
+                isApplicationCustomDomainActive: null,
+                tokenExpirationBuffer: tokenExpirationBuffer
+            );
+
+            Assert.Equal(tokenExpirationBuffer, config.TokenExpirationBuffer);
+        }
+
+        [Fact]
+        public void Constructor_WithZeroTokenExpirationBuffer_ShouldSetValue()
+        {
+            var config = new WristbandAuthConfig(
+                clientId: null,
+                clientSecret: null,
+                loginStateSecret: null,
+                loginUrl: null,
+                redirectUri: null,
+                wristbandApplicationVanityDomain: null,
+                customApplicationLoginPageUrl: null,
+                dangerouslyDisableSecureCookies: null,
+                parseTenantFromRootDomain: null,
+                scopes: null,
+                isApplicationCustomDomainActive: null,
+                tokenExpirationBuffer: 0
+            );
+
+            Assert.Equal(0, config.TokenExpirationBuffer);
+        }
+
+        [Fact]
+        public void TokenExpirationBuffer_ShouldHaveDefaultValue60()
+        {
+            // Test that the property has the default value when using parameterless constructor
+            var config = new WristbandAuthConfig();
+
+            Assert.Equal(60, config.TokenExpirationBuffer);
         }
     }
 }

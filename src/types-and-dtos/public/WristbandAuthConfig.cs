@@ -26,6 +26,7 @@ public class WristbandAuthConfig
     /// <param name="parseTenantFromRootDomain">The root domain for your application.</param>
     /// <param name="scopes">The scopes required for authentication.</param>
     /// <param name="isApplicationCustomDomainActive">Indicates whether an application-level custom domain is active for the Wristband application.</param>
+    /// <param name="tokenExpirationBuffer">Buffer time (in seconds) to subtract from the access token’s expiration time. This causes the token to be treated as expired before its actual expiration, helping to avoid token expiration during API calls.</param>
     public WristbandAuthConfig(
         string? clientId,
         string? clientSecret,
@@ -37,7 +38,8 @@ public class WristbandAuthConfig
         bool? dangerouslyDisableSecureCookies,
         string? parseTenantFromRootDomain,
         List<string>? scopes,
-        bool? isApplicationCustomDomainActive)
+        bool? isApplicationCustomDomainActive,
+        int? tokenExpirationBuffer)
     {
         ClientId = clientId;
         ClientSecret = clientSecret;
@@ -50,6 +52,7 @@ public class WristbandAuthConfig
         ParseTenantFromRootDomain = parseTenantFromRootDomain;
         Scopes = scopes;
         IsApplicationCustomDomainActive = isApplicationCustomDomainActive;
+        TokenExpirationBuffer = tokenExpirationBuffer;
     }
 
     /// <summary>
@@ -71,6 +74,11 @@ public class WristbandAuthConfig
     /// Gets or sets whether to disable the "Secure" cookie attribute. This should only be set to true in local development.
     /// </summary>
     public bool? DangerouslyDisableSecureCookies { get; set; } = false;
+
+    /// <summary>
+    /// Gets or sets whether an application-level custom domain is active for the Wristband application.
+    /// </summary>
+    public bool? IsApplicationCustomDomainActive { get; set; } = false;
 
     /// <summary>
     /// Gets or sets the secret used for encryption and decryption of login state cookies. It should be 32 or more characters long.
@@ -98,9 +106,9 @@ public class WristbandAuthConfig
     public List<string>? Scopes { get; set; } = new List<string>();
 
     /// <summary>
-    /// Gets or sets whether an application-level custom domain is active for the Wristband application.
+    /// Gets or sets the buffer time (in seconds) to subtract from the access token’s expiration time.
     /// </summary>
-    public bool? IsApplicationCustomDomainActive { get; set; } = false;
+    public int? TokenExpirationBuffer { get; set; } = 60;
 
     /// <summary>
     /// Gets or sets the vanity domain of the Wristband application.

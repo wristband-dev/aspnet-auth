@@ -10,6 +10,7 @@ public class CallbackData : TokenData
     /// </summary>
     public static readonly CallbackData Empty = new CallbackData(
         accessToken: "empty",
+        expiresAt: 0,
         expiresIn: 0,
         idToken: "empty",
         refreshToken: null,
@@ -23,7 +24,8 @@ public class CallbackData : TokenData
     /// Initializes a new instance of the <see cref="CallbackData"/> class with the specified data.
     /// </summary>
     /// <param name="accessToken">The access token.</param>
-    /// <param name="expiresIn">The expiration time of the access token (in seconds).</param>
+    /// <param name="expiresAt">The absolute expiration time of the access token in milliseconds since the Unix epoch.</param>
+    /// <param name="expiresIn">The duration from the current time until the access token is expired (in seconds).</param>
     /// <param name="idToken">The ID token.</param>
     /// <param name="refreshToken">The refresh token (optional).</param>
     /// <param name="userinfo">The user information.</param>
@@ -34,6 +36,7 @@ public class CallbackData : TokenData
     /// <exception cref="InvalidOperationException">Thrown if any required field is null, empty, or invalid.</exception>
     public CallbackData(
         string accessToken,
+        long expiresAt,
         int expiresIn,
         string idToken,
         string? refreshToken,
@@ -42,7 +45,7 @@ public class CallbackData : TokenData
         string? tenantCustomDomain,
         Dictionary<string, object>? customState,
         string? returnUrl)
-        : base(accessToken, expiresIn, idToken, refreshToken)
+        : base(accessToken, expiresAt, expiresIn, idToken, refreshToken)
     {
         if (userinfo == null)
         {

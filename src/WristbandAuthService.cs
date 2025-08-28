@@ -10,6 +10,7 @@ public class WristbandAuthService : IWristbandAuthService
 {
     private const string TenantDomainToken = "{tenant_domain}";
     private const string LoginRequiredError = "login_required";
+    private const int DefaultTokenExpirationBuffer = 60; // 60s
     private const int TokenRefreshRetryAttempts = 3;
     private const int DelayBetweenRefreshAttempts = 100; // 100ms
 
@@ -18,12 +19,13 @@ public class WristbandAuthService : IWristbandAuthService
     private readonly string mClientId;
     private readonly string mCustomApplicationLoginPageUrl;
     private readonly bool mDangerouslyDisableSecureCookies;
+    private readonly bool mIsApplicationCustomDomainActive;
     private readonly string mLoginStateSecret;
     private readonly string mLoginUrl;
     private readonly string mRedirectUri;
     private readonly string mParseTenantFromRootDomain;
     private readonly List<string> mScopes;
-    private readonly bool mIsApplicationCustomDomainActive;
+    private readonly int mTokenExpirationBuffer;
     private readonly string mWristbandApplicationVanityDomain;
 
     /// <summary>
@@ -72,6 +74,11 @@ public class WristbandAuthService : IWristbandAuthService
             throw new ArgumentException("The [RedirectUri] config must have a value.");
         }
 
+        if (authConfig.TokenExpirationBuffer.HasValue && authConfig.TokenExpirationBuffer.Value < 0)
+        {
+            throw new ArgumentException("The [TokenExpirationBuffer] config cannot be negative.");
+        }
+
         if (string.IsNullOrEmpty(authConfig.WristbandApplicationVanityDomain))
         {
             throw new ArgumentException("The [WristbandApplicationVanityDomain] config must have a value.");
@@ -109,12 +116,13 @@ public class WristbandAuthService : IWristbandAuthService
         mClientId = authConfig.ClientId;
         mCustomApplicationLoginPageUrl = string.IsNullOrEmpty(authConfig.CustomApplicationLoginPageUrl) ? string.Empty : authConfig.CustomApplicationLoginPageUrl;
         mDangerouslyDisableSecureCookies = authConfig.DangerouslyDisableSecureCookies.HasValue ? authConfig.DangerouslyDisableSecureCookies.Value : false;
+        mIsApplicationCustomDomainActive = authConfig.IsApplicationCustomDomainActive.HasValue ? authConfig.IsApplicationCustomDomainActive.Value : false;
         mLoginStateSecret = authConfig.LoginStateSecret;
         mLoginUrl = authConfig.LoginUrl;
         mRedirectUri = authConfig.RedirectUri;
         mParseTenantFromRootDomain = string.IsNullOrEmpty(authConfig.ParseTenantFromRootDomain) ? string.Empty : authConfig.ParseTenantFromRootDomain;
         mScopes = (authConfig.Scopes != null && authConfig.Scopes.Count > 0) ? authConfig.Scopes : new List<string> { "openid", "offline_access", "email" };
-        mIsApplicationCustomDomainActive = authConfig.IsApplicationCustomDomainActive.HasValue ? authConfig.IsApplicationCustomDomainActive.Value : false;
+        mTokenExpirationBuffer = authConfig.TokenExpirationBuffer ?? DefaultTokenExpirationBuffer;
         mWristbandApplicationVanityDomain = authConfig.WristbandApplicationVanityDomain;
     }
 
@@ -299,9 +307,12 @@ public class WristbandAuthService : IWristbandAuthService
         {
             var tokenResponse = await mWristbandApiClient.GetTokens(code, loginState.RedirectUri, loginState.CodeVerifier);
             var userInfo = await mWristbandApiClient.GetUserinfo(tokenResponse.AccessToken);
+            var expiresIn = (tokenResponse?.ExpiresIn ?? 0) - mTokenExpirationBuffer;
+            var expiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (expiresIn * 1000);
             var callbackData = new CallbackData(
                 tokenResponse?.AccessToken ?? string.Empty,
-                tokenResponse?.ExpiresIn ?? 0,
+                expiresAt,
+                expiresIn,
                 tokenResponse?.IdToken ?? string.Empty,
                 tokenResponse?.RefreshToken,
                 userInfo,
@@ -406,7 +417,14 @@ public class WristbandAuthService : IWristbandAuthService
             try
             {
                 var tokenResponse = await mWristbandApiClient.RefreshToken(refreshToken);
-                return tokenResponse;
+                var newExpiresIn = (tokenResponse?.ExpiresIn ?? 0) - mTokenExpirationBuffer;
+                var newExpiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (newExpiresIn * 1000);
+                return new TokenData(
+                    tokenResponse?.AccessToken ?? string.Empty,
+                    newExpiresAt,
+                    newExpiresIn,
+                    tokenResponse?.IdToken ?? string.Empty,
+                    tokenResponse?.RefreshToken);
             }
             catch (WristbandError ex)
             {
