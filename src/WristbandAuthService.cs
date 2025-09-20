@@ -10,23 +10,12 @@ public class WristbandAuthService : IWristbandAuthService
 {
     private const string TenantDomainToken = "{tenant_domain}";
     private const string LoginRequiredError = "login_required";
-    private const int DefaultTokenExpirationBuffer = 60; // 60s
     private const int TokenRefreshRetryAttempts = 3;
     private const int DelayBetweenRefreshAttempts = 100; // 100ms
 
-    private readonly IWristbandApiClient mWristbandApiClient;
-    private readonly ILoginStateHandler mLoginStateHandler;
-    private readonly string mClientId;
-    private readonly string mCustomApplicationLoginPageUrl;
-    private readonly bool mDangerouslyDisableSecureCookies;
-    private readonly bool mIsApplicationCustomDomainActive;
-    private readonly string mLoginStateSecret;
-    private readonly string mLoginUrl;
-    private readonly string mRedirectUri;
-    private readonly string mParseTenantFromRootDomain;
-    private readonly List<string> mScopes;
-    private readonly int mTokenExpirationBuffer;
-    private readonly string mWristbandApplicationVanityDomain;
+    private readonly IWristbandApiClient _wristbandApiClient;
+    private readonly ILoginStateHandler _loginStateHandler;
+    private readonly ConfigResolver _configResolver;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="WristbandAuthService"/> class for production use.
@@ -49,81 +38,26 @@ public class WristbandAuthService : IWristbandAuthService
     /// <exception cref="ArgumentException">Thrown if any required configuration values are missing or invalid.</exception>
     public WristbandAuthService(WristbandAuthConfig authConfig, IHttpClientFactory? httpClientFactory = null)
     {
-        if (string.IsNullOrEmpty(authConfig.ClientId))
-        {
-            throw new ArgumentException("The [ClientId] config must have a value.");
-        }
-
-        if (string.IsNullOrEmpty(authConfig.ClientSecret))
-        {
-            throw new ArgumentException("The [ClientSecret] config must have a value.");
-        }
-
-        if (string.IsNullOrEmpty(authConfig.LoginStateSecret) || authConfig.LoginStateSecret.Length < 32)
-        {
-            throw new ArgumentException("The [LoginStateSecret] config must have a value of at least 32 characters.");
-        }
-
-        if (string.IsNullOrEmpty(authConfig.LoginUrl))
-        {
-            throw new ArgumentException("The [LoginUrl] config must have a value.");
-        }
-
-        if (string.IsNullOrEmpty(authConfig.RedirectUri))
-        {
-            throw new ArgumentException("The [RedirectUri] config must have a value.");
-        }
-
-        if (authConfig.TokenExpirationBuffer.HasValue && authConfig.TokenExpirationBuffer.Value < 0)
-        {
-            throw new ArgumentException("The [TokenExpirationBuffer] config cannot be negative.");
-        }
-
-        if (string.IsNullOrEmpty(authConfig.WristbandApplicationVanityDomain))
-        {
-            throw new ArgumentException("The [WristbandApplicationVanityDomain] config must have a value.");
-        }
-
-        if (!string.IsNullOrEmpty(authConfig.ParseTenantFromRootDomain))
-        {
-            if (!authConfig.LoginUrl.Contains(TenantDomainToken))
-            {
-                throw new ArgumentException($"The [LoginUrl] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
-            }
-
-            if (!authConfig.RedirectUri.Contains(TenantDomainToken))
-            {
-                throw new ArgumentException($"The [RedirectUri] must contain the \"{TenantDomainToken}\" token when using tenant subdomains.");
-            }
-        }
-        else
-        {
-            if (authConfig.LoginUrl.Contains(TenantDomainToken))
-            {
-                throw new ArgumentException($"The [LoginUrl] cannot contain the \"{TenantDomainToken}\" token when tenant subdomains are not used.");
-            }
-
-            if (authConfig.RedirectUri.Contains(TenantDomainToken))
-            {
-                throw new ArgumentException($"The [RedirectUri] cannot contain the \"{TenantDomainToken}\" token when tenant subdomains are not used.");
-            }
-        }
-
         // Create a client using the factory - validation happens inside the factory
-        mWristbandApiClient = new WristbandApiClient(authConfig, httpClientFactory);
-        mLoginStateHandler = new LoginStateHandler();
+        _wristbandApiClient = new WristbandApiClient(authConfig, httpClientFactory);
+        _configResolver = new ConfigResolver(authConfig, _wristbandApiClient);
+        _loginStateHandler = new LoginStateHandler();
+    }
 
-        mClientId = authConfig.ClientId;
-        mCustomApplicationLoginPageUrl = string.IsNullOrEmpty(authConfig.CustomApplicationLoginPageUrl) ? string.Empty : authConfig.CustomApplicationLoginPageUrl;
-        mDangerouslyDisableSecureCookies = authConfig.DangerouslyDisableSecureCookies.HasValue ? authConfig.DangerouslyDisableSecureCookies.Value : false;
-        mIsApplicationCustomDomainActive = authConfig.IsApplicationCustomDomainActive.HasValue ? authConfig.IsApplicationCustomDomainActive.Value : false;
-        mLoginStateSecret = authConfig.LoginStateSecret;
-        mLoginUrl = authConfig.LoginUrl;
-        mRedirectUri = authConfig.RedirectUri;
-        mParseTenantFromRootDomain = string.IsNullOrEmpty(authConfig.ParseTenantFromRootDomain) ? string.Empty : authConfig.ParseTenantFromRootDomain;
-        mScopes = (authConfig.Scopes != null && authConfig.Scopes.Count > 0) ? authConfig.Scopes : new List<string> { "openid", "offline_access", "email" };
-        mTokenExpirationBuffer = authConfig.TokenExpirationBuffer ?? DefaultTokenExpirationBuffer;
-        mWristbandApplicationVanityDomain = authConfig.WristbandApplicationVanityDomain;
+    /// <summary>
+    /// Implements <see cref="IWristbandAuthService.Discover"/>.
+    /// </summary>
+    /// <inheritdoc />
+    public async Task Discover()
+    {
+        if (!_configResolver.GetAutoConfigureEnabled())
+        {
+            throw new WristbandError(
+                "sdk_config_error",
+                "Cannot preload configs when AutoConfigureEnabled is false. Set AutoConfigureEnabled to true.");
+        }
+
+        await _configResolver.PreloadConfig();
     }
 
     /// <summary>
@@ -141,11 +75,24 @@ public class WristbandAuthService : IWristbandAuthService
         response.Headers.Append("Cache-Control", "no-store");
         response.Headers.Append("Pragma", "no-cache");
 
+        // Fetch our SDK configs using the ConfigResolver
+        var clientId = _configResolver.GetClientId();
+        var customApplicationLoginPageUrl = await _configResolver.GetCustomApplicationLoginPageUrl();
+        var dangerouslyDisableSecureCookies = _configResolver.GetDangerouslyDisableSecureCookies();
+        var isApplicationCustomDomainActive = await _configResolver.GetIsApplicationCustomDomainActive();
+        var loginStateSecret = _configResolver.GetLoginStateSecret();
+        var parseTenantFromRootDomain = await _configResolver.GetParseTenantFromRootDomain();
+        var redirectUri = await _configResolver.GetRedirectUri();
+        var scopes = _configResolver.GetScopes();
+        var wristbandApplicationVanityDomain = _configResolver.GetWristbandApplicationVanityDomain();
+
         // Determine which domain-related values are present as it will be needed for the authorize URL.
         var tenantCustomDomain = ResolveTenantCustomDomainParam(context);
-        var tenantDomainName = ResolveTenantDomainName(context, mParseTenantFromRootDomain);
+        var tenantDomainName = ResolveTenantDomainName(context, parseTenantFromRootDomain);
         var defaultTenantCustomDomain = loginConfig.DefaultTenantCustomDomain ?? string.Empty;
         var defaultTenantDomainName = loginConfig.DefaultTenantDomainName ?? string.Empty;
+
+        var resolvedReturnUrl = ResolveReturnUrl(context, loginConfig.ReturnUrl);
 
         // In the event we cannot determine either a tenant custom domain or subdomain, send the user to app-level login.
         if (string.IsNullOrEmpty(tenantCustomDomain) &&
@@ -153,9 +100,12 @@ public class WristbandAuthService : IWristbandAuthService
             string.IsNullOrEmpty(defaultTenantCustomDomain) &&
             string.IsNullOrEmpty(defaultTenantDomainName))
         {
-            var apploginUrl = !string.IsNullOrEmpty(mCustomApplicationLoginPageUrl)
-                ? mCustomApplicationLoginPageUrl : $"https://{mWristbandApplicationVanityDomain}/login";
-            return await Task.FromResult($"{apploginUrl}?client_id={mClientId}");
+            var apploginUrl = !string.IsNullOrEmpty(customApplicationLoginPageUrl)
+                ? customApplicationLoginPageUrl : $"https://{wristbandApplicationVanityDomain}/login";
+            var stateParam = !string.IsNullOrEmpty(resolvedReturnUrl)
+                ? $"&state={Uri.EscapeDataString(resolvedReturnUrl)}"
+                : string.Empty;
+            return await Task.FromResult($"{apploginUrl}?client_id={clientId}{stateParam}");
         }
 
         // Create the login state which will be cached in a cookie so that it can be accessed in the callback.
@@ -163,25 +113,25 @@ public class WristbandAuthService : IWristbandAuthService
             ? loginConfig.CustomState
             : null;
 
-        var loginState = mLoginStateHandler.CreateLoginState(context, mRedirectUri, customState);
+        var loginState = _loginStateHandler.CreateLoginState(context, redirectUri, resolvedReturnUrl, customState);
 
-        mLoginStateHandler.CreateLoginStateCookie(context, loginState, mLoginStateSecret, mDangerouslyDisableSecureCookies);
+        _loginStateHandler.CreateLoginStateCookie(context, loginState, loginStateSecret, dangerouslyDisableSecureCookies);
 
         // Create the Wristband Authorize Endpoint URL which the user will get redirectd to.
         var queryParams = new Dictionary<string, string>
         {
-            { "client_id", mClientId },
-            { "redirect_uri", mRedirectUri },
+            { "client_id", clientId },
+            { "redirect_uri", redirectUri },
             { "response_type", "code" },
             { "state", loginState.State },
-            { "scope", string.Join(" ", mScopes) },
+            { "scope", string.Join(" ", scopes) },
             { "code_challenge", CreateCodeChallenge(loginState.CodeVerifier) },
             { "code_challenge_method", "S256" },
-            { "nonce", mLoginStateHandler.GenerateRandomString(32) },
+            { "nonce", _loginStateHandler.GenerateRandomString(32) },
             { "login_hint", context.Request.Query["login_hint"].FirstOrDefault() ?? string.Empty },
         };
 
-        var separator = mIsApplicationCustomDomainActive ? '.' : '-';
+        var separator = isApplicationCustomDomainActive ? '.' : '-';
         var queryString = string.Join("&", queryParams
             .Where(p => p.Value != null)
             .Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
@@ -199,7 +149,7 @@ public class WristbandAuthService : IWristbandAuthService
 
         if (!string.IsNullOrEmpty(tenantDomainName))
         {
-            return await Task.FromResult($"https://{tenantDomainName}{separator}{mWristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}");
+            return await Task.FromResult($"https://{tenantDomainName}{separator}{wristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}");
         }
 
         if (!string.IsNullOrEmpty(defaultTenantCustomDomain))
@@ -207,7 +157,7 @@ public class WristbandAuthService : IWristbandAuthService
             return await Task.FromResult($"https://{defaultTenantCustomDomain}/api/v1/oauth2/authorize?{queryString}");
         }
 
-        return await Task.FromResult($"https://{defaultTenantDomainName}{separator}{mWristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}");
+        return await Task.FromResult($"https://{defaultTenantDomainName}{separator}{wristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}");
     }
 
     /// <summary>
@@ -218,6 +168,13 @@ public class WristbandAuthService : IWristbandAuthService
     {
         context.Response.Headers.Append("Cache-Control", "no-store");
         context.Response.Headers.Append("Pragma", "no-cache");
+
+        // Fetch our SDK configs using the ConfigResolver
+        var dangerouslyDisableSecureCookies = _configResolver.GetDangerouslyDisableSecureCookies();
+        var loginStateSecret = _configResolver.GetLoginStateSecret();
+        var loginUrl = await _configResolver.GetLoginUrl();
+        var parseTenantFromRootDomain = await _configResolver.GetParseTenantFromRootDomain();
+        var tokenExpirationBuffer = _configResolver.GetTokenExpirationBuffer();
 
         // Ensure that the request has a query string present
         var query = context.Request.Query;
@@ -239,13 +196,13 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         // Resolve and validate the tenant domain name
-        var resolvedTenantDomainName = ResolveTenantDomainName(context, mParseTenantFromRootDomain);
+        var resolvedTenantDomainName = ResolveTenantDomainName(context, parseTenantFromRootDomain);
         if (string.IsNullOrEmpty(resolvedTenantDomainName))
         {
-            var errorCode = !string.IsNullOrEmpty(mParseTenantFromRootDomain)
+            var errorCode = !string.IsNullOrEmpty(parseTenantFromRootDomain)
                 ? "missing_tenant_subdomain"
                 : "missing_tenant_domain";
-            var errorMessage = !string.IsNullOrEmpty(mParseTenantFromRootDomain)
+            var errorMessage = !string.IsNullOrEmpty(parseTenantFromRootDomain)
                 ? "Callback request URL is missing a tenant subdomain"
                 : "Callback request is missing the [tenant_domain] query parameter from Wristband";
             throw new WristbandError(errorCode, errorMessage);
@@ -253,29 +210,29 @@ public class WristbandAuthService : IWristbandAuthService
 
         // Construct the tenant login URL in the event we have to redirect to the login endpoint
         string tenantLoginUrl;
-        if (!string.IsNullOrEmpty(mParseTenantFromRootDomain))
+        if (!string.IsNullOrEmpty(parseTenantFromRootDomain))
         {
-            tenantLoginUrl = mLoginUrl.Replace(TenantDomainToken, resolvedTenantDomainName);
+            tenantLoginUrl = loginUrl.Replace(TenantDomainToken, resolvedTenantDomainName);
         }
         else
         {
-            tenantLoginUrl = $"{mLoginUrl}?tenant_domain={resolvedTenantDomainName}";
+            tenantLoginUrl = $"{loginUrl}?tenant_domain={resolvedTenantDomainName}";
         }
 
         if (!string.IsNullOrEmpty(tenantCustomDomainParam))
         {
-            var querySeparator = !string.IsNullOrEmpty(mParseTenantFromRootDomain) ? "?" : "&";
+            var querySeparator = !string.IsNullOrEmpty(parseTenantFromRootDomain) ? "?" : "&";
             tenantLoginUrl = $"{tenantLoginUrl}{querySeparator}tenant_custom_domain={tenantCustomDomainParam}";
         }
 
         // Make sure the login state cookie exists, extract it, and set it to be cleared by the server.
-        var loginStateCookie = mLoginStateHandler.GetAndClearLoginStateCookie(context, mDangerouslyDisableSecureCookies);
+        var loginStateCookie = _loginStateHandler.GetAndClearLoginStateCookie(context, dangerouslyDisableSecureCookies);
         if (string.IsNullOrEmpty(loginStateCookie))
         {
             return new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, null, tenantLoginUrl);
         }
 
-        var loginState = mLoginStateHandler.DecryptLoginState(loginStateCookie, mLoginStateSecret);
+        var loginState = _loginStateHandler.DecryptLoginState(loginStateCookie, loginStateSecret);
         if (loginState == null)
         {
             return new CallbackResult(CallbackResultType.REDIRECT_REQUIRED, null, tenantLoginUrl);
@@ -305,9 +262,9 @@ public class WristbandAuthService : IWristbandAuthService
 
         try
         {
-            var tokenResponse = await mWristbandApiClient.GetTokens(code, loginState.RedirectUri, loginState.CodeVerifier);
-            var userInfo = await mWristbandApiClient.GetUserinfo(tokenResponse.AccessToken);
-            var expiresIn = (tokenResponse?.ExpiresIn ?? 0) - mTokenExpirationBuffer;
+            var tokenResponse = await _wristbandApiClient.GetTokens(code, loginState.RedirectUri, loginState.CodeVerifier);
+            var userInfo = await _wristbandApiClient.GetUserinfo(tokenResponse.AccessToken);
+            var expiresIn = (tokenResponse?.ExpiresIn ?? 0) - tokenExpirationBuffer;
             var expiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (expiresIn * 1000);
             var callbackData = new CallbackData(
                 tokenResponse?.AccessToken ?? string.Empty,
@@ -343,17 +300,31 @@ public class WristbandAuthService : IWristbandAuthService
             logoutConfig = new LogoutConfig();
         }
 
-        if (!string.IsNullOrWhiteSpace(logoutConfig.RefreshToken))
+        if (!string.IsNullOrEmpty(logoutConfig.State) && logoutConfig.State.Length > 512)
         {
-            await mWristbandApiClient.RevokeRefreshToken(logoutConfig.RefreshToken);
+            throw new ArgumentException("The [state] logout config cannot exceed 512 characters.");
         }
 
-        // The client ID is always required by the Wristband Logout Endpoint.
-        var tenantDomainName = ResolveTenantDomainName(context, mParseTenantFromRootDomain);
+        // Fetch our SDK configs using the ConfigResolver
+        var clientId = _configResolver.GetClientId();
+        var customApplicationLoginPageUrl = await _configResolver.GetCustomApplicationLoginPageUrl();
+        var isApplicationCustomDomainActive = await _configResolver.GetIsApplicationCustomDomainActive();
+        var parseTenantFromRootDomain = await _configResolver.GetParseTenantFromRootDomain();
+        var wristbandApplicationVanityDomain = _configResolver.GetWristbandApplicationVanityDomain();
+
+        if (!string.IsNullOrWhiteSpace(logoutConfig.RefreshToken))
+        {
+            await _wristbandApiClient.RevokeRefreshToken(logoutConfig.RefreshToken);
+        }
+
+        var tenantDomainName = ResolveTenantDomainName(context, parseTenantFromRootDomain);
         var tenantCustomDomainParam = ResolveTenantCustomDomainParam(context);
         var redirectUrl = !string.IsNullOrEmpty(logoutConfig.RedirectUrl) ? $"&redirect_url={logoutConfig.RedirectUrl}" : string.Empty;
-        var logoutPath = $"/api/v1/logout?client_id={mClientId}{redirectUrl}";
-        string separator = mIsApplicationCustomDomainActive ? "." : "-";
+        var state = !string.IsNullOrEmpty(logoutConfig.State) ? $"&state={Uri.EscapeDataString(logoutConfig.State)}" : string.Empty;
+
+        // The client ID is always required by the Wristband Logout Endpoint.
+        var logoutPath = $"/api/v1/logout?client_id={clientId}{redirectUrl}{state}";
+        string separator = isApplicationCustomDomainActive ? "." : "-";
 
         // Domain priority order resolution:
         // 1) If the LogoutConfig has a tenant custom domain explicitly defined, use that.
@@ -365,7 +336,7 @@ public class WristbandAuthService : IWristbandAuthService
         // 2) If the LogoutConfig has a tenant domain defined, then use that.
         if (!string.IsNullOrWhiteSpace(logoutConfig.TenantDomainName))
         {
-            return $"https://{logoutConfig.TenantDomainName}{separator}{mWristbandApplicationVanityDomain}{logoutPath}";
+            return $"https://{logoutConfig.TenantDomainName}{separator}{wristbandApplicationVanityDomain}{logoutPath}";
         }
 
         // 3) If the tenant_custom_domain query param exists, then use that.
@@ -378,16 +349,16 @@ public class WristbandAuthService : IWristbandAuthService
         // 4b) Otherwise, if tenant subdomains are not enabled, then look for it in the tenant_domain query param.
         if (!string.IsNullOrEmpty(tenantDomainName))
         {
-            return $"https://{tenantDomainName}{separator}{mWristbandApplicationVanityDomain}{logoutPath}";
+            return $"https://{tenantDomainName}{separator}{wristbandApplicationVanityDomain}{logoutPath}";
         }
 
         // Fallback to app login URL (or custom logout redirect URL) if tenant cannot be determined
-        var appLoginUrl = !string.IsNullOrEmpty(mCustomApplicationLoginPageUrl)
-            ? mCustomApplicationLoginPageUrl
-            : $"https://{mWristbandApplicationVanityDomain}/login";
+        var appLoginUrl = !string.IsNullOrEmpty(customApplicationLoginPageUrl)
+            ? customApplicationLoginPageUrl
+            : $"https://{wristbandApplicationVanityDomain}/login";
         return !string.IsNullOrEmpty(logoutConfig.RedirectUrl)
                 ? logoutConfig.RedirectUrl
-                : $"{appLoginUrl}?client_id={mClientId}";
+                : $"{appLoginUrl}?client_id={clientId}";
     }
 
     /// <summary>
@@ -411,13 +382,16 @@ public class WristbandAuthService : IWristbandAuthService
             return null;
         }
 
+        // Fetch our SDK configs using the ConfigResolver
+        var tokenExpirationBuffer = _configResolver.GetTokenExpirationBuffer();
+
         // Make 3 attempts to refresh the token
         for (int attempt = 1; attempt <= TokenRefreshRetryAttempts; attempt++)
         {
             try
             {
-                var tokenResponse = await mWristbandApiClient.RefreshToken(refreshToken);
-                var newExpiresIn = (tokenResponse?.ExpiresIn ?? 0) - mTokenExpirationBuffer;
+                var tokenResponse = await _wristbandApiClient.RefreshToken(refreshToken);
+                var newExpiresIn = (tokenResponse?.ExpiresIn ?? 0) - tokenExpirationBuffer;
                 var newExpiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (newExpiresIn * 1000);
                 return new TokenData(
                     tokenResponse?.AccessToken ?? string.Empty,
@@ -428,10 +402,6 @@ public class WristbandAuthService : IWristbandAuthService
             }
             catch (WristbandError ex)
             {
-                var actionString = attempt == TokenRefreshRetryAttempts ? "Aborting..." : "Retrying...";
-                Console.WriteLine($"Attempt {attempt} failed. {actionString}");
-                Console.WriteLine($"Exception Stack Trace: {ex}");
-
                 // Bail the process on invalid refresh token
                 if (ex.Error == "invalid_refresh_token" || attempt == TokenRefreshRetryAttempts)
                 {
@@ -440,12 +410,8 @@ public class WristbandAuthService : IWristbandAuthService
 
                 await Task.Delay(TokenRefreshRetryAttempts);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                var actionString = attempt == TokenRefreshRetryAttempts ? "Aborting..." : "Retrying...";
-                Console.WriteLine($"Attempt {attempt} failed. {actionString}");
-                Console.WriteLine($"Exception Stack Trace: {ex}");
-
                 if (attempt == TokenRefreshRetryAttempts)
                 {
                     throw;
@@ -520,5 +486,28 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         return tenantCustomDomainParam ?? string.Empty;
+    }
+
+    private static string? ResolveReturnUrl(HttpContext context, string? configReturnUrl)
+    {
+        var returnUrlParams = context.Request.Query["return_url"];
+
+        if (returnUrlParams.Count > 1)
+        {
+            throw new ArgumentException("More than one [return_url] query parameter was encountered");
+        }
+
+        var queryReturnUrl = returnUrlParams.FirstOrDefault();
+
+        // LoginConfig takes precedence over query parameter
+        var resolvedReturnUrl = configReturnUrl ?? queryReturnUrl;
+
+        if (!string.IsNullOrEmpty(resolvedReturnUrl) && resolvedReturnUrl.Length > 450)
+        {
+            Console.WriteLine($"Return URL exceeds 450 characters: {resolvedReturnUrl}");
+            return null; // Ignore if too long
+        }
+
+        return resolvedReturnUrl;
     }
 }

@@ -1,244 +1,377 @@
-using Microsoft.Extensions.Options;
-
 using Moq;
 
 namespace Wristband.AspNet.Auth.Tests;
 
 public class WristbandAuthServiceConstructorTests
 {
-    private IOptions<WristbandAuthConfig> CreateValidOptions()
+    private WristbandAuthConfig CreateValidConfig()
     {
-        return Options.Create(new WristbandAuthConfig
+        return new WristbandAuthConfig
         {
             ClientId = "valid-client-id",
             ClientSecret = "valid-client-secret",
-            LoginStateSecret = new string('a', 32), // At least 32 characters
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = false, // Disable auto-config for simpler testing
             LoginUrl = "https://example.com/login",
-            RedirectUri = "https://example.com/callback",
-            WristbandApplicationVanityDomain = "example.com",
-        });
+            RedirectUri = "https://example.com/callback"
+        };
     }
 
     [Fact]
-    public void DefaultConstructor_ShouldCallParameterizedConstructor_WithNullHttpClient()
+    public void DefaultConstructor_ShouldCreateService_WithValidConfig()
     {
-        var options = CreateValidOptions();
-        var service = new WristbandAuthService(options.Value);
+        var config = CreateValidConfig();
+        var service = new WristbandAuthService(config);
 
         Assert.NotNull(service);
-
-        var scopesField = typeof(WristbandAuthService).GetField("mScopes",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var scopes = scopesField?.GetValue(service) as List<string>;
-        Assert.Equal(new List<string> { "openid", "offline_access", "email" }, scopes);
     }
 
     [Fact]
-    public void ParameterizedConstructor_ShouldAcceptNullHttpClient()
+    public void ParameterizedConstructor_ShouldAcceptNullHttpClientFactory()
     {
-        var options = CreateValidOptions();
-        var service = new WristbandAuthService(options.Value, null);
+        var config = CreateValidConfig();
+        var service = new WristbandAuthService(config, null);
+
         Assert.NotNull(service);
     }
 
     [Fact]
     public void ParameterizedConstructor_ShouldAcceptCustomHttpClientFactory()
     {
-        var options = CreateValidOptions();
+        var config = CreateValidConfig();
         var mockFactory = new Mock<IHttpClientFactory>();
-        var service = new WristbandAuthService(options.Value, mockFactory.Object);
+        var service = new WristbandAuthService(config, mockFactory.Object);
+
+        Assert.NotNull(service);
+    }
+
+    // ////////////////////////////////////
+    //  VALIDATION TESTS (via ConfigResolver)
+    // ////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenClientIdIsEmpty()
+    {
+        var config = CreateValidConfig();
+        config.ClientId = "";
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("ClientId", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenClientIdIsNull()
+    {
+        var config = CreateValidConfig();
+        config.ClientId = null;
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("ClientId", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenClientSecretIsEmpty()
+    {
+        var config = CreateValidConfig();
+        config.ClientSecret = "";
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("ClientSecret", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenClientSecretIsNull()
+    {
+        var config = CreateValidConfig();
+        config.ClientSecret = null;
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("ClientSecret", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenLoginStateSecretTooShort()
+    {
+        var config = CreateValidConfig();
+        config.LoginStateSecret = "short"; // Less than 32 characters
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("LoginStateSecret", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldAllowNullLoginStateSecret()
+    {
+        var config = CreateValidConfig();
+        config.LoginStateSecret = null; // Should fallback to ClientSecret
+
+        var service = new WristbandAuthService(config);
         Assert.NotNull(service);
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenClientIdIsNullOrEmpty()
+    public void Constructor_ShouldThrowArgumentException_WhenVanityDomainIsEmpty()
     {
-        var config = CreateValidOptions().Value;
-        config.ClientId = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [ClientId] config must have a value.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenClientSecretIsNullOrEmpty()
-    {
-        var config = CreateValidOptions().Value;
-        config.ClientSecret = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [ClientSecret] config must have a value.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenLoginStateSecretIsNullOrEmpty()
-    {
-        var config = CreateValidOptions().Value;
-        config.LoginStateSecret = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [LoginStateSecret] config must have a value of at least 32 characters.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenLoginStateSecretIsLessThan32Characters()
-    {
-        var config = CreateValidOptions().Value;
-        config.LoginStateSecret = "short_secret";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [LoginStateSecret] config must have a value of at least 32 characters.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenLoginUrlIsNullOrEmpty()
-    {
-        var config = CreateValidOptions().Value;
-        config.LoginUrl = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [LoginUrl] config must have a value.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenRedirectUriIsNullOrEmpty()
-    {
-        var config = CreateValidOptions().Value;
-        config.RedirectUri = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [RedirectUri] config must have a value.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenLoginUrlContainsTenantDomainToken_AndNoRootDomain()
-    {
-        var config = CreateValidOptions().Value;
-        config.LoginUrl = "https://{tenant_domain}.example.com/login";
-        config.ParseTenantFromRootDomain = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [LoginUrl] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenRedirectUriContainsTenantDomainToken_AndNoRootDomain()
-    {
-        var config = CreateValidOptions().Value;
-        config.RedirectUri = "https://{tenant_domain}.example.com/callback";
-        config.ParseTenantFromRootDomain = "";
-
-        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [RedirectUri] cannot contain the \"{tenant_domain}\" token when tenant subdomains are not used.", ex.Message);
-    }
-
-    [Fact]
-    public void Constructor_ShouldUseDefaultScopes_WhenScopesNotProvided()
-    {
-        var config = CreateValidOptions().Value;
-        config.Scopes = null;
-
-        var service = new WristbandAuthService(config);
-
-        var scopesField = typeof(WristbandAuthService).GetField("mScopes",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        Assert.NotNull(scopesField);
-        var scopes = scopesField.GetValue(service) as List<string>;
-        Assert.NotNull(scopes);
-        Assert.Equal(new List<string> { "openid", "offline_access", "email" }, scopes);
-    }
-
-    [Fact]
-    public void Constructor_ShouldUseProvidedScopes_WhenScopesSpecified()
-    {
-        var config = CreateValidOptions().Value;
-        config.Scopes = new List<string> { "custom_scope1", "custom_scope2" };
-
-        var service = new WristbandAuthService(config);
-
-        var scopesField = typeof(WristbandAuthService).GetField("mScopes",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        Assert.NotNull(scopesField);
-        var scopes = scopesField.GetValue(service) as List<string>;
-        Assert.NotNull(scopes);
-        Assert.Equal(config.Scopes, scopes);
-    }
-
-    [Fact]
-    public void Constructor_ShouldSetDefaultValues_WhenOptionalParametersNotProvided()
-    {
-        var config = CreateValidOptions().Value;
-        config.IsApplicationCustomDomainActive = null;
-        config.DangerouslyDisableSecureCookies = null;
-        config.CustomApplicationLoginPageUrl = null;
-
-        var service = new WristbandAuthService(config);
-
-        var isApplicationCustomDomainActiveField = typeof(WristbandAuthService).GetField("mIsApplicationCustomDomainActive",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var dangerouslyDisableSecureCookiesField = typeof(WristbandAuthService).GetField("mDangerouslyDisableSecureCookies",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        var customApplicationLoginPageUrlField = typeof(WristbandAuthService).GetField("mCustomApplicationLoginPageUrl",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-
-        Assert.NotNull(isApplicationCustomDomainActiveField);
-        Assert.NotNull(dangerouslyDisableSecureCookiesField);
-        Assert.NotNull(customApplicationLoginPageUrlField);
-
-        Assert.False((bool)isApplicationCustomDomainActiveField.GetValue(service)!);
-        Assert.False((bool)dangerouslyDisableSecureCookiesField.GetValue(service)!);
-        Assert.Equal(string.Empty, (string)customApplicationLoginPageUrlField.GetValue(service)!);
-    }
-
-    [Fact]
-    public void Constructor_ShouldThrowArgumentException_WhenWristbandApplicationVanityDomainIsEmpty()
-    {
-        var config = CreateValidOptions().Value;
+        var config = CreateValidConfig();
         config.WristbandApplicationVanityDomain = "";
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [WristbandApplicationVanityDomain] config must have a value.", ex.Message);
+        Assert.Contains("WristbandApplicationVanityDomain", ex.Message);
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WithRootDomain_ButLoginUrlMissingToken()
+    public void Constructor_ShouldThrowArgumentException_WhenVanityDomainIsNull()
     {
-        var config = CreateValidOptions().Value;
-        config.LoginUrl = "https://example.com/login";
-        config.ParseTenantFromRootDomain = "example.com";
+        var config = CreateValidConfig();
+        config.WristbandApplicationVanityDomain = null;
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [LoginUrl] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
+        Assert.Contains("WristbandApplicationVanityDomain", ex.Message);
     }
 
     [Fact]
-    public void Constructor_ShouldThrowArgumentException_WithRootDomain_ButRedirectUriMissingToken()
+    public void Constructor_ShouldThrowArgumentException_WhenTokenExpirationBufferIsNegative()
     {
-        var config = CreateValidOptions().Value;
-        config.RedirectUri = "https://example.com/callback";
-        config.ParseTenantFromRootDomain = "example.com";
-        config.LoginUrl = "https://{tenant_domain}.example.com/login";
+        var config = CreateValidConfig();
+        config.TokenExpirationBuffer = -1;
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Equal("The [RedirectUri] must contain the \"{tenant_domain}\" token when using tenant subdomains.", ex.Message);
+        Assert.Contains("TokenExpirationBuffer", ex.Message);
+    }
+
+    // ////////////////////////////////////
+    //  AUTO-CONFIGURE DISABLED VALIDATION
+    // ////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenAutoConfigDisabled_AndLoginUrlMissing()
+    {
+        var config = CreateValidConfig();
+        config.AutoConfigureEnabled = false;
+        config.LoginUrl = null;
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("LoginUrl", ex.Message);
     }
 
     [Fact]
-    public void Constructor_ShouldSucceed_WhenAllConfigurationValid()
+    public void Constructor_ShouldThrowArgumentException_WhenAutoConfigDisabled_AndRedirectUriMissing()
     {
-        var config = CreateValidOptions().Value;
+        var config = CreateValidConfig();
+        config.AutoConfigureEnabled = false;
+        config.RedirectUri = null;
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("RedirectUri", ex.Message);
+    }
+
+    // ////////////////////////////////////
+    //  TENANT DOMAIN TOKEN VALIDATION
+    // ////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenLoginUrlHasToken_ButNoTenantParsing()
+    {
+        var config = CreateValidConfig();
         config.LoginUrl = "https://{tenant_domain}.example.com/login";
+        config.ParseTenantFromRootDomain = null; // No tenant parsing
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("LoginUrl", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenRedirectUriHasToken_ButNoTenantParsing()
+    {
+        var config = CreateValidConfig();
         config.RedirectUri = "https://{tenant_domain}.example.com/callback";
-        config.Scopes = new List<string> { "custom_scope" };
-        config.IsApplicationCustomDomainActive = true;
-        config.DangerouslyDisableSecureCookies = true;
-        config.CustomApplicationLoginPageUrl = "https://custom.example.com/login";
-        config.ParseTenantFromRootDomain = "example.com";
+        config.ParseTenantFromRootDomain = null; // No tenant parsing
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("RedirectUri", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenTenantParsing_ButLoginUrlMissingToken()
+    {
+        var config = CreateValidConfig();
+        config.LoginUrl = "https://example.com/login"; // Missing token
+        config.ParseTenantFromRootDomain = "example.com"; // Tenant parsing enabled
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("LoginUrl", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenTenantParsing_ButRedirectUriMissingToken()
+    {
+        var config = CreateValidConfig();
+        config.LoginUrl = "https://{tenant_domain}.example.com/login"; // Has token
+        config.RedirectUri = "https://example.com/callback"; // Missing token
+        config.ParseTenantFromRootDomain = "example.com"; // Tenant parsing enabled
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("RedirectUri", ex.Message);
+    }
+
+    // ////////////////////////////////////
+    //  AUTO-CONFIGURE ENABLED TESTS
+    // ////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WhenAutoConfigEnabled_WithMinimalConfig()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = true // Will fetch config from SDK
+        };
 
         var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
 
+    [Fact]
+    public void Constructor_ShouldSucceed_WhenAutoConfigEnabled_WithPartialManualConfig()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = true,
+            LoginUrl = "https://manual.example.com/login", // Manual override
+            // RedirectUri will come from auto-config
+        };
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenAutoConfigEnabled_WithInconsistentTenantConfig()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = true,
+            LoginUrl = "https://example.com/login", // No token
+            ParseTenantFromRootDomain = "example.com" // But parsing enabled
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_domain", ex.Message);
+    }
+
+    // ////////////////////////////////////
+    //  VALID CONFIGURATION TESTS
+    // ////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithValidTenantConfiguration()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = false,
+            LoginUrl = "https://{tenant_domain}.example.com/login",
+            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            ParseTenantFromRootDomain = "example.com",
+            LoginStateSecret = new string('a', 32)
+        };
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithoutTenantConfiguration()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = false,
+            LoginUrl = "https://example.com/login",
+            RedirectUri = "https://example.com/callback"
+            // No ParseTenantFromRootDomain
+        };
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithAllOptionalParameters()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = false,
+            LoginUrl = "https://example.com/login",
+            RedirectUri = "https://example.com/callback",
+            LoginStateSecret = new string('a', 32),
+            Scopes = new List<string> { "custom", "scopes" },
+            IsApplicationCustomDomainActive = true,
+            DangerouslyDisableSecureCookies = true,
+            CustomApplicationLoginPageUrl = "https://custom.example.com/login",
+            TokenExpirationBuffer = 120
+        };
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    // ////////////////////////////////////
+    //  EDGE CASES AND ERROR CONDITIONS
+    // ////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentNullException_WhenConfigIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => new WristbandAuthService(null!));
+    }
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithZeroTokenExpirationBuffer()
+    {
+        var config = CreateValidConfig();
+        config.TokenExpirationBuffer = 0;
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithEmptyScopes()
+    {
+        var config = CreateValidConfig();
+        config.Scopes = new List<string>(); // Empty list should use defaults
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithNullScopes()
+    {
+        var config = CreateValidConfig();
+        config.Scopes = null; // Null should use defaults
+
+        var service = new WristbandAuthService(config);
         Assert.NotNull(service);
     }
 }

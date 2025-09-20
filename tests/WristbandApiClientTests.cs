@@ -143,6 +143,156 @@ public class WristbandApiClientTests
     }
 
     // ////////////////////////////////////
+    //  GET SDK CONFIGURATION TESTS
+    // ////////////////////////////////////
+
+    [Fact]
+    public async Task GetSdkConfiguration_ValidResponse_ReturnsSdkConfiguration()
+    {
+        var expectedSdkConfig = new SdkConfiguration
+        {
+            CustomApplicationLoginPageUrl = "https://custom-login.example.com",
+            IsApplicationCustomDomainActive = true,
+            LoginUrl = "https://login.example.com",
+            LoginUrlTenantDomainSuffix = ".example.com",
+            RedirectUri = "https://callback.example.com"
+        };
+
+        var responseJson = JsonSerializer.Serialize(expectedSdkConfig);
+        SetupHttpResponse(HttpStatusCode.OK, responseJson);
+
+        var result = await _wristbandApiClient.GetSdkConfiguration();
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedSdkConfig.CustomApplicationLoginPageUrl, result.CustomApplicationLoginPageUrl);
+        Assert.Equal(expectedSdkConfig.IsApplicationCustomDomainActive, result.IsApplicationCustomDomainActive);
+        Assert.Equal(expectedSdkConfig.LoginUrl, result.LoginUrl);
+        Assert.Equal(expectedSdkConfig.LoginUrlTenantDomainSuffix, result.LoginUrlTenantDomainSuffix);
+        Assert.Equal(expectedSdkConfig.RedirectUri, result.RedirectUri);
+
+        VerifyHttpRequest(
+            HttpMethod.Get,
+            $"https://{_domain}/api/v1/clients/test-client-id/sdk-configuration",
+            Times.Once());
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_WithNullValues_ReturnsSdkConfiguration()
+    {
+        var expectedSdkConfig = new SdkConfiguration
+        {
+            CustomApplicationLoginPageUrl = null,
+            IsApplicationCustomDomainActive = false,
+            LoginUrl = "",
+            LoginUrlTenantDomainSuffix = null,
+            RedirectUri = ""
+        };
+
+        var responseJson = JsonSerializer.Serialize(expectedSdkConfig);
+        SetupHttpResponse(HttpStatusCode.OK, responseJson);
+
+        var result = await _wristbandApiClient.GetSdkConfiguration();
+
+        Assert.NotNull(result);
+        Assert.Null(result.CustomApplicationLoginPageUrl);
+        Assert.False(result.IsApplicationCustomDomainActive);
+        Assert.Equal("", result.LoginUrl);
+        Assert.Null(result.LoginUrlTenantDomainSuffix);
+        Assert.Equal("", result.RedirectUri);
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_ServerError_ThrowsHttpRequestException()
+    {
+        SetupHttpResponse(HttpStatusCode.InternalServerError, "Internal Server Error");
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.GetSdkConfiguration()
+        );
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_Unauthorized_ThrowsHttpRequestException()
+    {
+        SetupHttpResponse(HttpStatusCode.Unauthorized, "Unauthorized");
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.GetSdkConfiguration()
+        );
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_InvalidJsonResponse_ThrowsJsonException()
+    {
+        SetupHttpResponse(HttpStatusCode.OK, "invalid-json-content");
+
+        await Assert.ThrowsAsync<JsonException>(
+            () => _wristbandApiClient.GetSdkConfiguration()
+        );
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_NullResponse_ThrowsInvalidOperationException()
+    {
+        SetupHttpResponse(HttpStatusCode.OK, "null");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _wristbandApiClient.GetSdkConfiguration()
+        );
+
+        Assert.Equal("Failed to deserialize SDK configuration response", exception.Message);
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_EmptyResponse_ThrowsJsonException()
+    {
+        SetupHttpResponse(HttpStatusCode.OK, "");
+
+        await Assert.ThrowsAsync<JsonException>(
+            () => _wristbandApiClient.GetSdkConfiguration()
+        );
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_NetworkError_ThrowsHttpRequestException()
+    {
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(new HttpRequestException("Network error"));
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.GetSdkConfiguration()
+        );
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_SetsCorrectHeaders()
+    {
+        var expectedSdkConfig = new SdkConfiguration
+        {
+            LoginUrl = "https://login.example.com",
+            RedirectUri = "https://callback.example.com"
+        };
+
+        var responseJson = JsonSerializer.Serialize(expectedSdkConfig);
+        SetupHttpResponse(HttpStatusCode.OK, responseJson);
+
+        await _wristbandApiClient.GetSdkConfiguration();
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Verify(
+                "SendAsync",
+                Times.Once(),
+                ItExpr.Is<HttpRequestMessage>(req =>
+                    req.Headers.Contains("Accept") &&
+                    req.Headers.GetValues("Accept").Contains("application/json")),
+                ItExpr.IsAny<CancellationToken>()
+            );
+    }
+
+    // ////////////////////////////////////
     //  GET TOKENS TESTS
     // ////////////////////////////////////
 

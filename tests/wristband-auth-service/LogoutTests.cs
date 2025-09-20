@@ -6,7 +6,7 @@ using Moq;
 
 namespace Wristband.AspNet.Auth.Tests
 {
-    public class LogoutTestsComplete
+    public class LogoutTests
     {
         private readonly Mock<IWristbandApiClient> _mockApiClient = new Mock<IWristbandApiClient>();
         private readonly WristbandAuthConfig _defaultConfig = new WristbandAuthConfig
@@ -17,9 +17,9 @@ namespace Wristband.AspNet.Auth.Tests
             LoginUrl = "https://example.com/login",
             RedirectUri = "https://example.com/callback",
             WristbandApplicationVanityDomain = "example.com",
+            AutoConfigureEnabled = false,
         };
 
-        // ========== EXISTING TESTS (keep these) ==========
         [Fact]
         public async Task Logout_Should_ReturnAppLoginUrl_IfNoLogoutConfigProvided()
         {
@@ -33,8 +33,6 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("no-cache", httpContext.Response.Headers["Pragma"]);
             Assert.Equal("https://example.com/login?client_id=valid-client-id", logoutUrl);
         }
-
-        // ========== NEW TESTS FOR MISSING COVERAGE ==========
 
         // Test Priority 1: LogoutConfig.TenantCustomDomain (highest priority)
         [Fact]
@@ -63,7 +61,8 @@ namespace Wristband.AspNet.Auth.Tests
                 LoginUrl = "https://{tenant_domain}.example.com/login",  // Fixed: Added {tenant_domain} token
                 RedirectUri = "https://{tenant_domain}.example.com/callback",  // Fixed: Added {tenant_domain} token
                 WristbandApplicationVanityDomain = "example.com",
-                ParseTenantFromRootDomain = "example.com"
+                ParseTenantFromRootDomain = "example.com",
+                AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
 
@@ -109,7 +108,8 @@ namespace Wristband.AspNet.Auth.Tests
                 LoginUrl = "https://example.com/login",
                 RedirectUri = "https://example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                IsApplicationCustomDomainActive = true  // This changes separator from '-' to '.'
+                IsApplicationCustomDomainActive = true,  // This changes separator from '-' to '.'
+                AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
             HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
@@ -148,7 +148,8 @@ namespace Wristband.AspNet.Auth.Tests
                 LoginUrl = "https://{tenant_domain}.example.com/login",
                 RedirectUri = "https://{tenant_domain}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                ParseTenantFromRootDomain = "example.com"
+                ParseTenantFromRootDomain = "example.com",
+                AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
             HttpContext httpContext = TestUtils.setupHttpContext("tenant-from-subdomain.example.com");
@@ -194,7 +195,8 @@ namespace Wristband.AspNet.Auth.Tests
                 LoginUrl = "https://example.com/login",
                 RedirectUri = "https://example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                CustomApplicationLoginPageUrl = "https://custom-login.com"
+                CustomApplicationLoginPageUrl = "https://custom-login.com",
+                AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
             HttpContext httpContext = TestUtils.setupHttpContext("some-random-host.com");
@@ -278,9 +280,10 @@ namespace Wristband.AspNet.Auth.Tests
             HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
             LogoutConfig logoutConfig = new LogoutConfig
             {
-                TenantCustomDomain = "",  // Empty string
-                TenantDomainName = "",    // Empty string
-                RefreshToken = ""         // Empty string (should not be revoked)
+                TenantCustomDomain = "",
+                TenantDomainName = "",
+                RefreshToken = "", // Empty string (should not be revoked)
+                State = "",
             };
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
@@ -296,9 +299,10 @@ namespace Wristband.AspNet.Auth.Tests
             HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
             LogoutConfig logoutConfig = new LogoutConfig
             {
-                TenantCustomDomain = "   ",  // Whitespace only - now treated as invalid
-                TenantDomainName = "   ",    // Whitespace only - now treated as invalid
-                RefreshToken = "   "         // Whitespace only - now treated as invalid (not revoked)
+                TenantCustomDomain = "   ",
+                TenantDomainName = "   ",
+                RefreshToken = "   ", // Whitespace only - now treated as invalid (not revoked)
+                State = "   ",
             };
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
@@ -309,12 +313,77 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://example.com/login?client_id=valid-client-id", logoutUrl);
         }
 
+        [Fact]
+        public async Task Logout_Should_ThrowException_WhenStateExceeds512Characters()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                State = new string('a', 513)
+            };
+
+            var exception = await Assert.ThrowsAsync<ArgumentException>(
+                () => service.Logout(httpContext, logoutConfig));
+
+            Assert.Equal("The [state] logout config cannot exceed 512 characters.", exception.Message);
+        }
+
+        [Fact]
+        public async Task Logout_Should_IncludeStateParam_WhenStateProvided()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com");
+            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                State = "custom-state-value"
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&state=custom-state-value", logoutUrl);
+        }
+
+        [Fact]
+        public async Task Logout_Should_UrlEncodeStateParam_WhenStateContainsSpecialCharacters()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com");
+            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                State = "state with spaces & special chars"
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Contains("state=state%20with%20spaces%20%26%20special%20chars", logoutUrl);
+        }
+
+        [Fact]
+        public async Task Logout_Should_IncludeBothRedirectUrlAndStateParams_WhenBothProvided()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com");
+            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                RedirectUrl = "https://post-logout.com",
+                State = "custom-state"
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com&state=custom-state", logoutUrl);
+        }
+
         private WristbandAuthService setupWristbandAuthService(WristbandAuthConfig authConfig)
         {
             WristbandAuthService wristbandAuthService = new WristbandAuthService(authConfig);
 
             // Use reflection to inject the mock API Client object into the service
-            var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+            var fieldInfo = typeof(WristbandAuthService).GetField("_wristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
             if (fieldInfo != null && _mockApiClient != null)
             {
                 fieldInfo.SetValue(wristbandAuthService, _mockApiClient.Object);

@@ -23,7 +23,8 @@ public class CallbackTests
             LoginStateSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             LoginUrl = "https://login.example.com",
             RedirectUri = "https://app.example.com/callback",
-            WristbandApplicationVanityDomain = "wristband.example.com"
+            WristbandApplicationVanityDomain = "wristband.example.com",
+            AutoConfigureEnabled = false,
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
@@ -34,13 +35,13 @@ public class CallbackTests
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);
 
-        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        var fieldInfo = typeof(WristbandAuthService).GetField("_wristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         if (fieldInfo != null)
         {
             fieldInfo.SetValue(wristbandAuthService, _mockApiClient.Object);
         }
 
-        var loginHandlerField = typeof(WristbandAuthService).GetField("mLoginStateHandler", BindingFlags.NonPublic | BindingFlags.Instance);
+        var loginHandlerField = typeof(WristbandAuthService).GetField("_loginStateHandler", BindingFlags.NonPublic | BindingFlags.Instance);
         if (loginHandlerField != null)
         {
             loginHandlerField.SetValue(wristbandAuthService, _mockLoginStateHandler.Object);
@@ -218,7 +219,8 @@ public class CallbackTests
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com"
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext(

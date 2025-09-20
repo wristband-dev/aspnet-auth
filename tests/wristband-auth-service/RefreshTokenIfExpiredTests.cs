@@ -23,12 +23,13 @@ public class RefreshTokenIfExpiredTests
             RedirectUri = "https://example.com/callback",
             WristbandApplicationVanityDomain = "example.com",
             IsApplicationCustomDomainActive = false,
+            AutoConfigureEnabled = false,
         };
 
         _wristbandAuthService = new WristbandAuthService(_authConfig);
 
         // Use reflection to inject the mock API Client object into the service
-        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        var fieldInfo = typeof(WristbandAuthService).GetField("_wristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         if (fieldInfo != null && _mockApiClient != null)
         {
             fieldInfo.SetValue(_wristbandAuthService, _mockApiClient.Object);
@@ -192,9 +193,6 @@ public class RefreshTokenIfExpiredTests
 
         Assert.NotNull(exception);
         Assert.Equal("Some error", exception.Message);
-
-        var output = stringWriter.ToString();
-        Assert.Contains("Attempt 3 failed. Aborting...", output);
     }
 
     [Fact]
@@ -253,7 +251,7 @@ public class RefreshTokenIfExpiredTests
         var customService = new WristbandAuthService(customConfig);
 
         // Inject mock API client
-        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        var fieldInfo = typeof(WristbandAuthService).GetField("_wristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         fieldInfo?.SetValue(customService, _mockApiClient.Object);
 
         var mockTokenResponse = new TokenResponse

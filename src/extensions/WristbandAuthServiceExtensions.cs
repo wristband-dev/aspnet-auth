@@ -11,34 +11,6 @@ namespace Wristband.AspNet.Auth;
 public static class WristbandAuthServiceExtensions
 {
     /// <summary>
-    /// ** TODO: This is deprecated. Left here for backwards compatibility. Remove in next major version release.
-    /// </summary>
-    /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
-    /// <param name="configuration">The configuration instance to read settings from.</param>
-    /// <param name="configSectionName">The configuration section name for Wristband auth settings. Defaults to "WristbandAuthConfig".</param>
-    /// <returns>The <see cref="IServiceCollection"/> so that additional calls can be chained.</returns>
-    public static IServiceCollection AddWristbandAuth(
-        this IServiceCollection services,
-        IConfiguration configuration,
-        string configSectionName = "WristbandAuthConfig")
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(configuration);
-
-        services.Configure<WristbandAuthConfig>(configuration.GetSection(configSectionName));
-        services.AddScoped<IWristbandAuthService>(serviceProvider =>
-        {
-            var authConfig = serviceProvider.GetRequiredService<IOptions<WristbandAuthConfig>>().Value;
-            return new WristbandAuthService(authConfig, null);
-        });
-
-        // Register the service factory if not already registered
-        services.TryAddSingleton<WristbandAuthServiceFactory>();
-
-        return services;
-    }
-
-    /// <summary>
     /// Adds Wristband authentication services to the service collection using direct configuration.
     /// </summary>
     /// <param name="services">The <see cref="IServiceCollection"/> to add services to.</param>
@@ -54,7 +26,7 @@ public static class WristbandAuthServiceExtensions
         ArgumentNullException.ThrowIfNull(configureOptions);
 
         services.Configure(configureOptions);
-        services.AddScoped<IWristbandAuthService>(serviceProvider =>
+        services.AddSingleton<IWristbandAuthService>(serviceProvider =>
         {
             var authConfig = serviceProvider.GetRequiredService<IOptions<WristbandAuthConfig>>().Value;
 
