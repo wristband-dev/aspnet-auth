@@ -9,6 +9,16 @@ namespace Wristband.AspNet.Auth;
 public interface IWristbandAuthService
 {
     /// <summary>
+    /// Immediately fetch and resolve all auto-configuration values from the Wristband SDK Configuration Endpoint.
+    /// This is useful when you want to fail fast if auto-configuration is unavailable, or when you need configuration
+    /// values resolved before making any auth method calls. Manual configuration values take precedence over
+    /// auto-configured values.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="WristbandError">Thrown when auto-configure is disabled or configuration fails.</exception>
+    Task Discover();
+
+    /// <summary>
     /// Generates the authorization URL for initiating a login request with Wristband.
     /// </summary>
     /// <param name="context">The HTTP context for the request, containing details about the login request.</param>

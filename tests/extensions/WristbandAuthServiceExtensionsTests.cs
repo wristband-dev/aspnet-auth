@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
@@ -8,58 +7,6 @@ namespace Wristband.AspNet.Auth.Tests;
 
 public class WristbandServiceExtensionsTests
 {
-    [Fact]
-    public void AddWristbandAuth_WithConfiguration_RegistersServices()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                {"WristbandAuthConfig:ClientId", "test-client"},
-                {"WristbandAuthConfig:ClientSecret", "test-secret"},
-                {"WristbandAuthConfig:LoginStateSecret", "this-is-a-secret-that-is-at-least-32-chars"},
-                {"WristbandAuthConfig:LoginUrl", "https://login.url"},
-                {"WristbandAuthConfig:RedirectUri", "https://redirect.uri"},
-                {"WristbandAuthConfig:WristbandApplicationVanityDomain", "wristband.domain"}
-            })
-            .Build();
-
-        services.AddWristbandAuth(configuration);
-
-        var serviceProvider = services.BuildServiceProvider();
-        var authConfig = serviceProvider.GetService<IOptions<WristbandAuthConfig>>();
-        Assert.NotNull(authConfig);
-        Assert.Equal("test-client", authConfig.Value.ClientId);
-        Assert.Equal("test-secret", authConfig.Value.ClientSecret);
-    }
-
-    [Fact]
-    public void AddWristbandAuth_WithConfiguration_CustomSectionName_RegistersServices()
-    {
-        var services = new ServiceCollection();
-        services.AddOptions();
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                {"CustomSection:ClientId", "test-client"},
-                {"CustomSection:ClientSecret", "test-secret"},
-                {"CustomSection:LoginStateSecret", "this-is-a-secret-that-is-at-least-32-chars"},
-                {"CustomSection:LoginUrl", "https://login.url"},
-                {"CustomSection:RedirectUri", "https://redirect.uri"},
-                {"CustomSection:WristbandApplicationVanityDomain", "wristband.domain"}
-            })
-            .Build();
-
-        services.AddWristbandAuth(configuration, "CustomSection");
-
-        var serviceProvider = services.BuildServiceProvider();
-        var authConfig = serviceProvider.GetService<IOptions<WristbandAuthConfig>>();
-        Assert.NotNull(authConfig);
-        Assert.Equal("test-client", authConfig.Value.ClientId);
-        Assert.Equal("test-secret", authConfig.Value.ClientSecret);
-    }
-
     [Fact]
     public void AddWristbandAuth_WithDirectConfiguration_RegistersServices()
     {
@@ -271,7 +218,7 @@ public class WristbandServiceExtensionsTests
 
         var registration = services.FirstOrDefault(sd => sd.ServiceType == typeof(IWristbandAuthService));
         Assert.NotNull(registration);
-        Assert.Equal(ServiceLifetime.Scoped, registration.Lifetime);
+        Assert.Equal(ServiceLifetime.Singleton, registration.Lifetime);
     }
 
     [Fact]
@@ -330,37 +277,6 @@ public class WristbandServiceExtensionsTests
             "auth01",
             options => { }
         ));
-        Assert.Equal("services", exception.ParamName);
-    }
-
-    // Existing null check tests
-    [Fact]
-    public void AddWristbandAuth_WithNullConfiguration_ThrowsArgumentNullException()
-    {
-        var services = new ServiceCollection();
-        IConfiguration configuration = null!;
-
-        var exception = Assert.Throws<ArgumentNullException>(() => services.AddWristbandAuth(configuration));
-        Assert.Equal("configuration", exception.ParamName);
-    }
-
-    [Fact]
-    public void AddWristbandAuth_WithNullConfigureOptions_ThrowsArgumentNullException()
-    {
-        var services = new ServiceCollection();
-        Action<WristbandAuthConfig> configureOptions = null!;
-
-        var exception = Assert.Throws<ArgumentNullException>(() => services.AddWristbandAuth(configureOptions));
-        Assert.Equal("configureOptions", exception.ParamName);
-    }
-
-    [Fact]
-    public void AddWristbandAuth_WithNullServices_ThrowsArgumentNullException()
-    {
-        IServiceCollection services = null!;
-        var configuration = new ConfigurationBuilder().Build();
-
-        var exception = Assert.Throws<ArgumentNullException>(() => services.AddWristbandAuth(configuration));
         Assert.Equal("services", exception.ParamName);
     }
 }

@@ -17,56 +17,17 @@ public class LoginStateHandlerTests
     {
         var httpContext = TestUtils.setupHttpContext("example.com");
         var redirectUri = "https://example.com/callback";
+        var returnUrl = "/dashboard";
         var customState = new Dictionary<string, object> { { "test", "value" } };
 
-        var result = mLoginStateHandler.CreateLoginState(httpContext, redirectUri, customState);
+        var result = mLoginStateHandler.CreateLoginState(httpContext, redirectUri, returnUrl, customState);
 
         Assert.NotNull(result);
         Assert.Equal(43, result.State.Length); // Base64 encoded 32 bytes
         Assert.Equal(43, result.CodeVerifier.Length);
         Assert.Equal(redirectUri, result.RedirectUri);
-        Assert.Empty(result.ReturnUrl!);
-        Assert.Equal(customState, result.CustomState);
-    }
-
-    [Fact]
-    public void CreateLoginState_WithReturnUrl_IncludesReturnUrl()
-    {
-        var redirectUri = "https://example.com/callback";
-        var returnUrl = "/dashboard";
-        var httpContext = TestUtils.setupHttpContext(
-            "example.com",
-            queryString: $"return_url={returnUrl}"
-        );
-
-        var result = mLoginStateHandler.CreateLoginState(httpContext, redirectUri, null);
-
         Assert.Equal(returnUrl, result.ReturnUrl);
-    }
-
-    [Fact]
-    public void CreateLoginState_WithMultipleReturnUrls_ThrowsArgumentException()
-    {
-        var redirectUri = "https://example.com/callback";
-        var httpContext = TestUtils.setupHttpContext("example.com");
-        httpContext.Request.QueryString = new QueryString("?return_url=/dashboard&return_url=/profile");
-
-        Assert.Throws<ArgumentException>(() =>
-            mLoginStateHandler.CreateLoginState(httpContext, redirectUri, null));
-    }
-
-    [Fact]
-    public void CreateLoginState_WithSpacesInReturnUrl_ThrowsArgumentException()
-    {
-        var returnUrl = "/dash board";
-        var httpContext = TestUtils.setupHttpContext(
-            "example.com",
-            queryString: $"return_url={returnUrl}"
-        );
-        var redirectUri = "https://example.com/callback";
-
-        Assert.Throws<ArgumentException>(() =>
-            mLoginStateHandler.CreateLoginState(httpContext, redirectUri, null));
+        Assert.Equal(customState, result.CustomState);
     }
 
     [Fact]
@@ -331,5 +292,47 @@ public class LoginStateHandlerTests
         Assert.Equal(2, deletedCookies.Count);
         Assert.True(deletedCookies.Any(c => c.StartsWith("login#state3#")), "Expected a deleted cookie with prefix 'login#state3#'");
         Assert.True(deletedCookies.Any(c => c.StartsWith("login#state2#")), "Expected a deleted cookie with prefix 'login#state2#'");
+    }
+
+    [Fact]
+    public void CreateLoginState_WithNullReturnUrl_SetsNullReturnUrl()
+    {
+        var httpContext = TestUtils.setupHttpContext("example.com");
+        var redirectUri = "https://example.com/callback";
+
+        var result = mLoginStateHandler.CreateLoginState(httpContext, redirectUri, null, null);
+
+        Assert.Null(result.ReturnUrl);
+    }
+
+    [Fact]
+    public void GetAndClearLoginStateCookie_WithNoStateParam_ReturnsEmptyString()
+    {
+        var httpContext = TestUtils.setupHttpContext("example.com");
+
+        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false);
+
+        Assert.Equal(string.Empty, result);
+    }
+
+    [Fact]
+    public void GetAndClearLoginStateCookie_WithMultipleMatchingCookies_ReturnsNewest()
+    {
+        var cookies = new Dictionary<string, string>();
+        var olderTimestamp = DateTimeOffset.UtcNow.AddMinutes(-10).ToUnixTimeMilliseconds();
+        var newerTimestamp = DateTimeOffset.UtcNow.AddMinutes(-5).ToUnixTimeMilliseconds();
+
+        cookies.Add($"login#testState#{olderTimestamp}", "olderValue");
+        cookies.Add($"login#testState#{newerTimestamp}", "newerValue");
+
+        var httpContext = TestUtils.setupHttpContext(
+            "example.com",
+            queryString: "state=testState",
+            requestCookies: cookies
+        );
+
+        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false);
+
+        Assert.Equal("newerValue", result);
     }
 }

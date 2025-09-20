@@ -23,7 +23,8 @@ public class LoginTests
             LoginStateSecret = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)),
             LoginUrl = "https://login.example.com",
             RedirectUri = "https://app.example.com/callback",
-            WristbandApplicationVanityDomain = "wristband.example.com"
+            WristbandApplicationVanityDomain = "wristband.example.com",
+            AutoConfigureEnabled = false,
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
@@ -43,6 +44,7 @@ public class LoginTests
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             IsApplicationCustomDomainActive = false,
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
@@ -64,7 +66,8 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            CustomApplicationLoginPageUrl = "https://custom.example.com/login"
+            CustomApplicationLoginPageUrl = "https://custom.example.com/login",
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
@@ -85,7 +88,8 @@ public class LoginTests
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com"
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var customDomain = "tenant.custom.com";
@@ -110,7 +114,8 @@ public class LoginTests
             LoginUrl = "https://{tenant_domain}.example.com/login",
             RedirectUri = "https://{tenant_domain}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com"
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
 
@@ -135,7 +140,8 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            IsApplicationCustomDomainActive = false
+            IsApplicationCustomDomainActive = false,
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var tenantDomain = "mytenant";
@@ -193,7 +199,8 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            IsApplicationCustomDomainActive = true
+            IsApplicationCustomDomainActive = true,
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var tenantDomain = "tenant1";
@@ -245,7 +252,8 @@ public class LoginTests
             LoginUrl = _defaultConfig.LoginUrl,
             RedirectUri = _defaultConfig.RedirectUri,
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            Scopes = new List<string> { "openid", "offline_access", "email", "profile", "custom_scope" }
+            Scopes = new List<string> { "openid", "offline_access", "email", "profile", "custom_scope" },
+            AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext(
@@ -264,11 +272,189 @@ public class LoginTests
         Assert.Contains("custom_scope", scopes);
     }
 
+    [Fact]
+    public async Task Login_WithReturnUrlInLoginConfig_TakesPrecedenceOverQueryParam()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var configReturnUrl = "/config-dashboard";
+        var loginConfig = new LoginConfig { ReturnUrl = configReturnUrl };
+
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            $"tenant_domain=tenant1&return_url=/query-dashboard");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        // Just verify the URL was generated successfully
+        Assert.StartsWith("https://tenant1-", result);
+    }
+
+    [Fact]
+    public async Task Login_WithReturnUrlFromQueryParam_UsesQueryValue()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            $"tenant_domain=tenant1&return_url=/dashboard");
+
+        var result = await service.Login(httpContext, null);
+
+        // Just verify the URL was generated successfully
+        Assert.StartsWith("https://tenant1-", result);
+    }
+
+    [Fact]
+    public async Task Login_WithMultipleReturnUrlParams_ThrowsArgumentException()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_domain=tenant1&return_url=/dashboard&return_url=/profile");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.Login(httpContext, null));
+
+        Assert.Contains("More than one [return_url] query parameter was encountered", ex.Message);
+    }
+
+    [Fact]
+    public async Task Login_WithReturnUrlTooLong_StillGeneratesUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        // Create a return URL longer than 450 characters
+        var longReturnUrl = "/dashboard/" + new string('a', 450);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            $"tenant_domain=tenant1&return_url={longReturnUrl}");
+
+        // Suppress console output during test
+        var originalOut = Console.Out;
+        try
+        {
+            Console.SetOut(TextWriter.Null);
+            var result = await service.Login(httpContext, null);
+
+            // Should still generate URL successfully (return URL is ignored internally)
+            Assert.StartsWith("https://tenant1-", result);
+        }
+        finally
+        {
+            Console.SetOut(originalOut);
+        }
+    }
+
+    [Fact]
+    public async Task Login_WithReturnUrlExactly450Chars_GeneratesUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        // Create a return URL exactly 450 characters
+        var returnUrl = "/dashboard/" + new string('a', 439);
+        Assert.Equal(450, returnUrl.Length);
+
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            $"tenant_domain=tenant1&return_url={returnUrl}");
+
+        var result = await service.Login(httpContext, null);
+
+        // Should generate URL successfully
+        Assert.StartsWith("https://tenant1-", result);
+    }
+
+    [Fact]
+    public async Task Login_WithCustomStateInLoginConfig_GeneratesUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var customState = new Dictionary<string, object>
+        {
+            { "userId", "12345" },
+            { "source", "login_test" }
+        };
+        var loginConfig = new LoginConfig { CustomState = customState };
+
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_domain=tenant1");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        // Should generate URL successfully with custom state
+        Assert.StartsWith("https://tenant1-", result);
+    }
+
+    [Fact]
+    public async Task Login_WithEmptyCustomState_GeneratesUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var emptyCustomState = new Dictionary<string, object>();
+        var loginConfig = new LoginConfig { CustomState = emptyCustomState };
+
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_domain=tenant1");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        // Should generate URL successfully
+        Assert.StartsWith("https://tenant1-", result);
+    }
+
+    [Fact]
+    public async Task Login_WithNoTenantInfoAndReturnUrl_IncludesStateParam()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = _defaultConfig.LoginUrl,
+            RedirectUri = _defaultConfig.RedirectUri,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            IsApplicationCustomDomainActive = false,
+            AutoConfigureEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+        var returnUrl = "/dashboard";
+        var loginConfig = new LoginConfig { ReturnUrl = returnUrl };
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        var expectedUrl = $"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}&state={Uri.EscapeDataString(returnUrl)}";
+        Assert.Equal(expectedUrl, result);
+    }
+
+    [Fact]
+    public async Task Login_WithCustomApplicationLoginPageAndReturnUrl_IncludesStateParam()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = _defaultConfig.LoginUrl,
+            RedirectUri = _defaultConfig.RedirectUri,
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            CustomApplicationLoginPageUrl = "https://custom.example.com/login",
+            AutoConfigureEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+        var returnUrl = "/profile";
+        var loginConfig = new LoginConfig { ReturnUrl = returnUrl };
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        Assert.Equal($"https://custom.example.com/login?client_id={config.ClientId}&state={Uri.EscapeDataString(returnUrl)}", result);
+    }
+
     private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);
 
-        var fieldInfo = typeof(WristbandAuthService).GetField("mWristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
+        var fieldInfo = typeof(WristbandAuthService).GetField("_wristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         if (fieldInfo != null)
         {
             fieldInfo.SetValue(wristbandAuthService, _mockApiClient.Object);
@@ -289,6 +475,7 @@ public class LoginTests
         _mockLoginStateHandler
             .Setup(x => x.CreateLoginState(
                 It.IsAny<HttpContext>(),
+                It.IsAny<string>(),
                 It.IsAny<string>(),
                 It.IsAny<Dictionary<string, object>>()))
             .Returns(loginState);

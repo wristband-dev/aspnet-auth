@@ -12,9 +12,10 @@ internal interface ILoginStateHandler
     /// </summary>
     /// <param name="httpContext">The HTTP context for the request, containing details about the login request.</param>
     /// <param name="redirectUri">The redirect URI for callback after authentication.</param>
+    /// <param name="returnUrl">The URL to return to after authentication. Takes precedence over return_url query parameter.</param>
     /// <param name="customState">Custom state data for the login request.</param>
     /// <returns> A <see cref="LoginState"/> for the current login request.</returns>
-    LoginState CreateLoginState(HttpContext httpContext, string redirectUri, Dictionary<string, object>? customState);
+    LoginState CreateLoginState(HttpContext httpContext, string redirectUri, string? returnUrl, Dictionary<string, object>? customState);
 
     /// <summary>
     /// Sets a response cookie containing the login state to be preserved until the time of callback processing.

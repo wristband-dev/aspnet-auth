@@ -20,6 +20,7 @@ internal class WristbandApiClient : IWristbandApiClient
         CreateInternalFactory());
 
     private readonly AuthenticationHeaderValue _basicAuthHeader;
+    private readonly string _clientId;
     private readonly HttpClient _httpClient;
     private readonly string _wristbandApplicationVanityDomain;
 
@@ -61,6 +62,7 @@ internal class WristbandApiClient : IWristbandApiClient
         }
 
         _wristbandApplicationVanityDomain = authConfig.WristbandApplicationVanityDomain;
+        _clientId = authConfig.ClientId;
         _basicAuthHeader = new AuthenticationHeaderValue(
             "Basic",
             Convert.ToBase64String(Encoding.UTF8.GetBytes($"{authConfig.ClientId}:{authConfig.ClientSecret}")));
@@ -68,6 +70,32 @@ internal class WristbandApiClient : IWristbandApiClient
         // Use the provided factory, or fall back to internal one
         var factory = externalFactory ?? _internalFactory.Value;
         _httpClient = factory.CreateClient("WristbandAuth");
+    }
+
+    /// <summary>
+    /// Implements <see cref="IWristbandApiClient.GetTokens"/>.
+    /// </summary>
+    /// <inheritdoc />
+    public async Task<SdkConfiguration> GetSdkConfiguration()
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"https://{_wristbandApplicationVanityDomain}/api/v1/clients/{_clientId}/sdk-configuration");
+
+        request.Headers.Add("Accept", "application/json");
+
+        var response = await _httpClient.SendAsync(request);
+        response.EnsureSuccessStatusCode();
+
+        var responseContent = await response.Content.ReadAsStringAsync();
+
+        var sdkConfig = JsonSerializer.Deserialize<SdkConfiguration>(responseContent);
+        if (sdkConfig == null)
+        {
+            throw new InvalidOperationException("Failed to deserialize SDK configuration response");
+        }
+
+        return sdkConfig;
     }
 
     /// <summary>

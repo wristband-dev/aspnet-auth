@@ -20,7 +20,7 @@ internal class LoginState
         string state,
         string codeVerifier,
         string redirectUri,
-        string returnUrl,
+        string? returnUrl,
         Dictionary<string, object>? customState)
     {
         if (string.IsNullOrEmpty(state))

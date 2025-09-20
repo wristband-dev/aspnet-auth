@@ -24,31 +24,18 @@ internal class LoginStateHandler : ILoginStateHandler
     /// Implements <see cref="ILoginStateHandler.CreateLoginState"/>.
     /// </summary>
     /// <inheritdoc />
-    public LoginState CreateLoginState(HttpContext httpContext, string redirectUri, Dictionary<string, object>? customState)
+    public LoginState CreateLoginState(
+        HttpContext httpContext,
+        string redirectUri,
+        string? returnUrl,
+        Dictionary<string, object>? customState)
     {
-        var returnUrl = string.Empty;
-
-        if (httpContext.Request.Query.TryGetValue("return_url", out var returnUrlValue))
-        {
-            if (returnUrlValue.Count > 1)
-            {
-                throw new ArgumentException("More than one [return_url] query parameter was encountered.");
-            }
-
-            returnUrl = returnUrlValue.ToString();
-        }
-
-        if (returnUrl.Contains(" "))
-        {
-            throw new ArgumentException("Return URL should not contain spaces.");
-        }
-
         return new LoginState(
-            GenerateRandomString(32),
-            GenerateRandomString(32),
-            redirectUri,
-            returnUrl,
-            customState);
+            state: GenerateRandomString(32),
+            codeVerifier: GenerateRandomString(32),
+            redirectUri: redirectUri,
+            returnUrl: returnUrl,
+            customState: customState);
     }
 
     /// <summary>

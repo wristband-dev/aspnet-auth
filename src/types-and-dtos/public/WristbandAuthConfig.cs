@@ -15,18 +15,19 @@ public class WristbandAuthConfig
     /// <summary>
     /// Initializes a new instance of the <see cref="WristbandAuthConfig"/> class with the specified configuration values.
     /// </summary>
+    /// <param name="autoConfigureEnabled">Flag that tells the SDK to automatically set some of the SDK configuration values by calling to Wristband's SDK Auto-Configuration Endpoint.</param>
     /// <param name="clientId">The client ID for the application.</param>
     /// <param name="clientSecret">The client secret for the application.</param>
+    /// <param name="customApplicationLoginPageUrl">Custom application login (tenant discovery) page URL if self-hosting the application login/tenant discovery UI.</param>
+    /// <param name="dangerouslyDisableSecureCookies">If set to true, the "Secure" attribute will not be included in any cookie settings. Should be used only in local development.</param>
+    /// <param name="isApplicationCustomDomainActive">Indicates whether an application-level custom domain is active for the Wristband application.</param>
     /// <param name="loginStateSecret">A secret (32 or more characters in length) used for encryption and decryption of login state cookies.</param>
     /// <param name="loginUrl">The URL for initiating the login request.</param>
     /// <param name="redirectUri">The redirect URI for callback after authentication.</param>
-    /// <param name="wristbandApplicationVanityDomain">The vanity domain of the Wristband application.</param>
-    /// <param name="customApplicationLoginPageUrl">Custom application login (tenant discovery) page URL if self-hosting the application login/tenant discovery UI.</param>
-    /// <param name="dangerouslyDisableSecureCookies">If set to true, the "Secure" attribute will not be included in any cookie settings. Should be used only in local development.</param>
     /// <param name="parseTenantFromRootDomain">The root domain for your application.</param>
     /// <param name="scopes">The scopes required for authentication.</param>
-    /// <param name="isApplicationCustomDomainActive">Indicates whether an application-level custom domain is active for the Wristband application.</param>
     /// <param name="tokenExpirationBuffer">Buffer time (in seconds) to subtract from the access token’s expiration time. This causes the token to be treated as expired before its actual expiration, helping to avoid token expiration during API calls.</param>
+    /// <param name="wristbandApplicationVanityDomain">The vanity domain of the Wristband application.</param>
     public WristbandAuthConfig(
         string? clientId,
         string? clientSecret,
@@ -39,7 +40,8 @@ public class WristbandAuthConfig
         string? parseTenantFromRootDomain,
         List<string>? scopes,
         bool? isApplicationCustomDomainActive,
-        int? tokenExpirationBuffer)
+        int? tokenExpirationBuffer,
+        bool? autoConfigureEnabled = null)
     {
         ClientId = clientId;
         ClientSecret = clientSecret;
@@ -53,7 +55,15 @@ public class WristbandAuthConfig
         Scopes = scopes;
         IsApplicationCustomDomainActive = isApplicationCustomDomainActive;
         TokenExpirationBuffer = tokenExpirationBuffer;
+        AutoConfigureEnabled = autoConfigureEnabled;
     }
+
+    /// <summary>
+    /// Gets or sets whether the SDK should automatically configure some settings by calling the Wristband SDK Auto-Configuration Endpoint.
+    /// Any manually provided configurations will take precedence over the configs returned from the endpoint.
+    /// Auto-configure is enabled by default. When disabled, manual configurations must be provided, or an error will be thrown.
+    /// </summary>
+    public bool? AutoConfigureEnabled { get; set; } = true;
 
     /// <summary>
     /// Gets or sets the client ID for the application.
@@ -78,7 +88,7 @@ public class WristbandAuthConfig
     /// <summary>
     /// Gets or sets whether an application-level custom domain is active for the Wristband application.
     /// </summary>
-    public bool? IsApplicationCustomDomainActive { get; set; } = false;
+    public bool? IsApplicationCustomDomainActive { get; set; }
 
     /// <summary>
     /// Gets or sets the secret used for encryption and decryption of login state cookies. It should be 32 or more characters long.

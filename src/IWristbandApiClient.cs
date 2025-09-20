@@ -6,6 +6,12 @@ namespace Wristband.AspNet.Auth;
 internal interface IWristbandApiClient
 {
     /// <summary>
+    /// Gets the SDK configuration from the Wristband platform.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation that returns the SDK configuration.</returns>
+    Task<SdkConfiguration> GetSdkConfiguration();
+
+    /// <summary>
     /// Calls the Wristband Token Endpoint with the authorization code grant type to exchange an authorization code for tokens.
     /// </summary>
     /// <param name="code">The authorization code received from the OAuth2 authorization server.</param>
