@@ -5,7 +5,7 @@ using Moq;
 
 namespace Wristband.AspNet.Auth.Tests;
 
-public class WristbandServiceExtensionsTests
+public class WristbandAuthServiceExtensionsTests
 {
     [Fact]
     public void AddWristbandAuth_WithDirectConfiguration_RegistersServices()

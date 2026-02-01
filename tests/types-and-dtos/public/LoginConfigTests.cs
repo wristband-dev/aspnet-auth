@@ -9,7 +9,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             Assert.Null(config.CustomState);
             Assert.Null(config.DefaultTenantCustomDomain);
-            Assert.Null(config.DefaultTenantDomainName);
+            Assert.Null(config.DefaultTenantName);
             Assert.Null(config.ReturnUrl);
         }
 
@@ -18,16 +18,16 @@ namespace Wristband.AspNet.Auth.Tests
         {
             var customState = new Dictionary<string, object> { { "key", "value" } };
             var defaultTenantCustomDomain = "custom.example.com";
-            var defaultTenantDomainName = "example.com";
+            var defaultTenantName = "example.com";
             var returnUrl = "https://app.example.com/dashboard";
 
-            var config = new LoginConfig(customState, defaultTenantCustomDomain, defaultTenantDomainName, returnUrl);
+            var config = new LoginConfig(customState, defaultTenantCustomDomain, defaultTenantName, returnUrl);
 
             Assert.NotNull(config.CustomState);
             Assert.True(config.CustomState.ContainsKey("key"));
             Assert.Equal("value", config.CustomState["key"]);
             Assert.Equal(defaultTenantCustomDomain, config.DefaultTenantCustomDomain);
-            Assert.Equal(defaultTenantDomainName, config.DefaultTenantDomainName);
+            Assert.Equal(defaultTenantName, config.DefaultTenantName);
             Assert.Equal(returnUrl, config.ReturnUrl);
         }
 
@@ -38,7 +38,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             Assert.Null(config.CustomState);
             Assert.Null(config.DefaultTenantCustomDomain);
-            Assert.Null(config.DefaultTenantDomainName);
+            Assert.Null(config.DefaultTenantName);
             Assert.Null(config.ReturnUrl);
         }
 
@@ -50,14 +50,14 @@ namespace Wristband.AspNet.Auth.Tests
             var newCustomState = new Dictionary<string, object> { { "foo", 42 } };
             config.CustomState = newCustomState;
             config.DefaultTenantCustomDomain = "updated.example.com";
-            config.DefaultTenantDomainName = "updated.com";
+            config.DefaultTenantName = "updated.com";
             config.ReturnUrl = "https://updated.example.com/profile";
 
             Assert.NotNull(config.CustomState);
             Assert.True(config.CustomState.ContainsKey("foo"));
             Assert.Equal(42, config.CustomState["foo"]);
             Assert.Equal("updated.example.com", config.DefaultTenantCustomDomain);
-            Assert.Equal("updated.com", config.DefaultTenantDomainName);
+            Assert.Equal("updated.com", config.DefaultTenantName);
             Assert.Equal("https://updated.example.com/profile", config.ReturnUrl);
         }
     }

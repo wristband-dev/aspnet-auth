@@ -33,7 +33,7 @@ internal class SdkConfiguration
 
     /// <summary>
     /// Gets or sets the URL of your application's login endpoint that redirects to Wristband to initialize
-    /// the login flow. If using tenant subdomains, this value must contain the `{tenant_domain}` token.
+    /// the login flow. If using tenant subdomains, this value must contain the `{tenant_name}` placeholder.
     /// </summary>
     [JsonPropertyName("loginUrl")]
     public string LoginUrl { get; set; } = string.Empty;
@@ -48,7 +48,7 @@ internal class SdkConfiguration
     /// <summary>
     /// Gets or sets the URI that Wristband will redirect to after authenticating a user.
     /// This should point to your application's callback endpoint.
-    /// If using tenant subdomains, this value must contain the `{tenant_domain}` token.
+    /// If using tenant subdomains, this value must contain the `{tenant_name}` placeholder.
     /// </summary>
     [JsonPropertyName("redirectUri")]
     public string RedirectUri { get; set; } = string.Empty;

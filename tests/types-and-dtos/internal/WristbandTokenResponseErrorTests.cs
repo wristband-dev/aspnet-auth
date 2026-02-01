@@ -2,12 +2,12 @@ using System.Text.Json;
 
 namespace Wristband.AspNet.Auth.Tests
 {
-    public class TokenResponseErrorTests
+    public class WristbandTokenResponseErrorTests
     {
         [Fact]
         public void Constructor_ShouldInitializeWithDefaultValues()
         {
-            var errorResponse = new TokenResponseError();
+            var errorResponse = new WristbandTokenResponseError();
 
             Assert.NotNull(errorResponse);
             Assert.Equal(string.Empty, errorResponse.Error);
@@ -17,7 +17,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Properties_ShouldAllowModification()
         {
-            var errorResponse = new TokenResponseError();
+            var errorResponse = new WristbandTokenResponseError();
             errorResponse.Error = "invalid_request";
             errorResponse.ErrorDescription = "The request is missing a required parameter.";
 
@@ -28,7 +28,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Should_SerializeCorrectly()
         {
-            var errorResponse = new TokenResponseError
+            var errorResponse = new WristbandTokenResponseError
             {
                 Error = "unauthorized_client",
                 ErrorDescription = "The client is not authorized to request an access token."
@@ -45,7 +45,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             string json = "{\"error\":\"access_denied\",\"error_description\":\"The user denied the request.\"}";
 
-            var errorResponse = JsonSerializer.Deserialize<TokenResponseError>(json);
+            var errorResponse = JsonSerializer.Deserialize<WristbandTokenResponseError>(json);
 
             Assert.NotNull(errorResponse);
             Assert.Equal("access_denied", errorResponse.Error);
@@ -57,7 +57,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             string json = "{\"error\":\"invalid_token\"}";
 
-            var errorResponse = JsonSerializer.Deserialize<TokenResponseError>(json);
+            var errorResponse = JsonSerializer.Deserialize<WristbandTokenResponseError>(json);
 
             Assert.NotNull(errorResponse);
             Assert.Equal("invalid_token", errorResponse.Error);
@@ -69,7 +69,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             string json = "{}";
 
-            var errorResponse = JsonSerializer.Deserialize<TokenResponseError>(json);
+            var errorResponse = JsonSerializer.Deserialize<WristbandTokenResponseError>(json);
 
             Assert.NotNull(errorResponse);
             Assert.Equal(string.Empty, errorResponse.Error);

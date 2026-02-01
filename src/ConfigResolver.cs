@@ -6,7 +6,8 @@ namespace Wristband.AspNet.Auth;
 /// </summary>
 internal class ConfigResolver
 {
-    private const string TenantDomainToken = "{tenant_domain}";
+    private const string TenantDomainPlaceholder = "{tenant_domain}";
+    private const string TenantNamePlaceholder = "{tenant_name}";
     private const int DefaultTokenExpirationBuffer = 60; // 60 seconds
     private const int MaxFetchAttempts = 3;
     private const int AttemptDelayMs = 100; // 100 milliseconds
@@ -249,6 +250,16 @@ internal class ConfigResolver
         throw new InvalidOperationException("RedirectUri must have a value");
     }
 
+    /// <summary>
+    /// Checks if a URL contains either the tenant domain placeholder or tenant name placeholder.
+    /// </summary>
+    /// <param name="url">The URL to check.</param>
+    /// <returns>True if the URL contains either placeholder; otherwise, false.</returns>
+    private static bool ContainsTenantPlaceholder(string url)
+    {
+        return url.Contains(TenantDomainPlaceholder) || url.Contains(TenantNamePlaceholder);
+    }
+
     private async Task<SdkConfiguration> LoadSdkConfig()
     {
         if (_cachedSdkConfig != null)
@@ -347,31 +358,31 @@ internal class ConfigResolver
         }
 
         var hasRootDomain = !string.IsNullOrEmpty(_authConfig.ParseTenantFromRootDomain);
-        var loginUrlHasToken = _authConfig.LoginUrl.Contains(TenantDomainToken);
-        var redirectUriHasToken = _authConfig.RedirectUri.Contains(TenantDomainToken);
+        var loginUrlHasToken = ContainsTenantPlaceholder(_authConfig.LoginUrl);
+        var redirectUriHasToken = ContainsTenantPlaceholder(_authConfig.RedirectUri);
 
         if (hasRootDomain && !loginUrlHasToken)
         {
             throw new ArgumentException(
-                $"The [LoginUrl] must contain the \"{TenantDomainToken}\" token when using the [ParseTenantFromRootDomain] config.");
+                $"The [LoginUrl] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
         }
 
         if (!hasRootDomain && loginUrlHasToken)
         {
             throw new ArgumentException(
-                $"The [LoginUrl] cannot contain the \"{TenantDomainToken}\" token when the [ParseTenantFromRootDomain] is absent.");
+                $"The [LoginUrl] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
         }
 
         if (hasRootDomain && !redirectUriHasToken)
         {
             throw new ArgumentException(
-                $"The [RedirectUri] must contain the \"{TenantDomainToken}\" token when using the [ParseTenantFromRootDomain] config.");
+                $"The [RedirectUri] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
         }
 
         if (!hasRootDomain && redirectUriHasToken)
         {
             throw new ArgumentException(
-                $"The [RedirectUri] cannot contain the \"{TenantDomainToken}\" token when the [ParseTenantFromRootDomain] is absent.");
+                $"The [RedirectUri] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
         }
     }
 
@@ -381,33 +392,33 @@ internal class ConfigResolver
 
         if (!string.IsNullOrEmpty(_authConfig.LoginUrl))
         {
-            var hasToken = _authConfig.LoginUrl.Contains(TenantDomainToken);
+            var hasToken = ContainsTenantPlaceholder(_authConfig.LoginUrl);
             if (hasRootDomain && !hasToken)
             {
                 throw new ArgumentException(
-                    $"The [LoginUrl] must contain the \"{TenantDomainToken}\" token when using the [ParseTenantFromRootDomain] config.");
+                    $"The [LoginUrl] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
             }
 
             if (!hasRootDomain && hasToken)
             {
                 throw new ArgumentException(
-                    $"The [LoginUrl] cannot contain the \"{TenantDomainToken}\" token when the [ParseTenantFromRootDomain] is absent.");
+                    $"The [LoginUrl] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
             }
         }
 
         if (!string.IsNullOrEmpty(_authConfig.RedirectUri))
         {
-            var hasToken = _authConfig.RedirectUri.Contains(TenantDomainToken);
+            var hasToken = ContainsTenantPlaceholder(_authConfig.RedirectUri);
             if (hasRootDomain && !hasToken)
             {
                 throw new ArgumentException(
-                    $"The [RedirectUri] must contain the \"{TenantDomainToken}\" token when using the [ParseTenantFromRootDomain] config.");
+                    $"The [RedirectUri] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
             }
 
             if (!hasRootDomain && hasToken)
             {
                 throw new ArgumentException(
-                    $"The [RedirectUri] cannot contain the \"{TenantDomainToken}\" token when the [ParseTenantFromRootDomain] is absent.");
+                    $"The [RedirectUri] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
             }
         }
     }
@@ -429,38 +440,38 @@ internal class ConfigResolver
         var loginUrl = _authConfig.LoginUrl ?? sdkConfiguration.LoginUrl;
         var redirectUri = _authConfig.RedirectUri ?? sdkConfiguration.RedirectUri;
         var parseTenantFromRootDomain = _authConfig.ParseTenantFromRootDomain ??
-                                       sdkConfiguration.LoginUrlTenantDomainSuffix;
+            sdkConfiguration.LoginUrlTenantDomainSuffix;
 
         var hasRootDomain = !string.IsNullOrEmpty(parseTenantFromRootDomain);
-        var loginUrlHasToken = loginUrl.Contains(TenantDomainToken);
-        var redirectUriHasToken = redirectUri.Contains(TenantDomainToken);
+        var loginUrlHasToken = ContainsTenantPlaceholder(loginUrl);
+        var redirectUriHasToken = ContainsTenantPlaceholder(redirectUri);
 
         if (hasRootDomain && !loginUrlHasToken)
         {
             throw new WristbandError(
                 "config_validation_error",
-                $"The resolved [LoginUrl] must contain the \"{TenantDomainToken}\" token when using [ParseTenantFromRootDomain].");
+                $"The resolved [LoginUrl] must contain the \"{TenantNamePlaceholder}\" token when using [ParseTenantFromRootDomain].");
         }
 
         if (!hasRootDomain && loginUrlHasToken)
         {
             throw new WristbandError(
                 "config_validation_error",
-                $"The resolved [LoginUrl] cannot contain the \"{TenantDomainToken}\" token when [ParseTenantFromRootDomain] is absent.");
+                $"The resolved [LoginUrl] cannot contain the \"{TenantNamePlaceholder}\" token when [ParseTenantFromRootDomain] is absent.");
         }
 
         if (hasRootDomain && !redirectUriHasToken)
         {
             throw new WristbandError(
                 "config_validation_error",
-                $"The resolved [RedirectUri] must contain the \"{TenantDomainToken}\" token when using [ParseTenantFromRootDomain].");
+                $"The resolved [RedirectUri] must contain the \"{TenantNamePlaceholder}\" token when using [ParseTenantFromRootDomain].");
         }
 
         if (!hasRootDomain && redirectUriHasToken)
         {
             throw new WristbandError(
                 "config_validation_error",
-                $"The resolved [RedirectUri] cannot contain the \"{TenantDomainToken}\" token when [ParseTenantFromRootDomain] is absent.");
+                $"The resolved [RedirectUri] cannot contain the \"{TenantNamePlaceholder}\" token when [ParseTenantFromRootDomain] is absent.");
         }
     }
 }

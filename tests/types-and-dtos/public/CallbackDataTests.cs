@@ -2,6 +2,18 @@ namespace Wristband.AspNet.Auth.Tests
 {
     public class CallbackDataTests
     {
+        // Helper method to create test UserInfo
+        private static UserInfo CreateTestUserInfo()
+        {
+            return new UserInfo
+            {
+                UserId = "test_user_id",
+                TenantId = "test_tenant_id",
+                ApplicationId = "test_app_id",
+                IdentityProviderName = "Wristband"
+            };
+        }
+
         [Fact]
         public void Constructor_NullUserinfo_ThrowsInvalidOperationException()
         {
@@ -12,7 +24,7 @@ namespace Wristband.AspNet.Auth.Tests
                 idToken: "id_token",
                 refreshToken: "refresh_token",
                 userinfo: null!,
-                tenantDomainName: "example.com",
+                tenantName: "example.com",
                 tenantCustomDomain: "custom.example.com",
                 customState: null,
                 returnUrl: "/dashboard"
@@ -20,9 +32,10 @@ namespace Wristband.AspNet.Auth.Tests
         }
 
         [Fact]
-        public void Constructor_NullOrEmptyTenantDomainName_ThrowsInvalidOperationException()
+        public void Constructor_NullOrEmptyTenantName_ThrowsInvalidOperationException()
         {
             var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
+            var userinfo = CreateTestUserInfo();
 
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
@@ -30,8 +43,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: null!,
+                userinfo: userinfo,
+                tenantName: null!,
                 tenantCustomDomain: "custom.example.com",
                 customState: null,
                 returnUrl: "/dashboard"
@@ -43,8 +56,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: "",
+                userinfo: userinfo,
+                tenantName: "",
                 tenantCustomDomain: "custom.example.com",
                 customState: null,
                 returnUrl: "/dashboard"
@@ -54,7 +67,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_ValidParameters_CreatesInstanceSuccessfully()
         {
-            var userinfo = new UserInfo("{\"name\":\"John\"}");
+            var userinfo = CreateTestUserInfo();
             var customState = new Dictionary<string, object> { { "key", "value" } };
             var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
 
@@ -65,7 +78,7 @@ namespace Wristband.AspNet.Auth.Tests
                 idToken: "id_token",
                 refreshToken: "refresh_token",
                 userinfo: userinfo,
-                tenantDomainName: "example.com",
+                tenantName: "example.com",
                 tenantCustomDomain: "custom.example.com",
                 customState: customState,
                 returnUrl: "/dashboard"
@@ -77,7 +90,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("id_token", callbackData.IdToken);
             Assert.Equal("refresh_token", callbackData.RefreshToken);
             Assert.Equal(userinfo, callbackData.Userinfo);
-            Assert.Equal("example.com", callbackData.TenantDomainName);
+            Assert.Equal("example.com", callbackData.TenantName);
             Assert.Equal("custom.example.com", callbackData.TenantCustomDomain);
             Assert.Equal(customState, callbackData.CustomState);
             Assert.Equal("/dashboard", callbackData.ReturnUrl);
@@ -87,6 +100,7 @@ namespace Wristband.AspNet.Auth.Tests
         public void Constructor_NullOptionalParameters_SetsDefaults()
         {
             var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
+            var userinfo = CreateTestUserInfo();
 
             var callbackData = new CallbackData(
                 accessToken: "token",
@@ -94,8 +108,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: "example.com",
+                userinfo: userinfo,
+                tenantName: "example.com",
                 tenantCustomDomain: null,
                 customState: null,
                 returnUrl: null
@@ -118,7 +132,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("empty", empty.IdToken);
             Assert.Null(empty.RefreshToken);
             Assert.Equal(UserInfo.Empty, empty.Userinfo);
-            Assert.Equal("empty", empty.TenantDomainName);
+            Assert.Equal("empty", empty.TenantName);
             Assert.Null(empty.TenantCustomDomain);
             Assert.Null(empty.CustomState);
             Assert.Null(empty.ReturnUrl);
@@ -127,6 +141,8 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_InheritsTokenDataValidation_NegativeExpiresAt()
         {
+            var userinfo = CreateTestUserInfo();
+
             // Test that TokenData validation is inherited
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
@@ -134,8 +150,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: "example.com",
+                userinfo: userinfo,
+                tenantName: "example.com",
                 tenantCustomDomain: null,
                 customState: null,
                 returnUrl: null
@@ -145,6 +161,8 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_InheritsTokenDataValidation_NegativeExpiresIn()
         {
+            var userinfo = CreateTestUserInfo();
+
             // Test that TokenData validation is inherited
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
@@ -152,8 +170,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: -1,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: "example.com",
+                userinfo: userinfo,
+                tenantName: "example.com",
                 tenantCustomDomain: null,
                 customState: null,
                 returnUrl: null
@@ -163,6 +181,8 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_InheritsTokenDataValidation_NullAccessToken()
         {
+            var userinfo = CreateTestUserInfo();
+
             // Test that TokenData validation is inherited
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: null!,
@@ -170,8 +190,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: 3600,
                 idToken: "id_token",
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: "example.com",
+                userinfo: userinfo,
+                tenantName: "example.com",
                 tenantCustomDomain: null,
                 customState: null,
                 returnUrl: null
@@ -181,6 +201,8 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_InheritsTokenDataValidation_NullIdToken()
         {
+            var userinfo = CreateTestUserInfo();
+
             // Test that TokenData validation is inherited
             Assert.Throws<InvalidOperationException>(() => new CallbackData(
                 accessToken: "token",
@@ -188,8 +210,8 @@ namespace Wristband.AspNet.Auth.Tests
                 expiresIn: 3600,
                 idToken: null!,
                 refreshToken: "refresh_token",
-                userinfo: new UserInfo("{}"),
-                tenantDomainName: "example.com",
+                userinfo: userinfo,
+                tenantName: "example.com",
                 tenantCustomDomain: null,
                 customState: null,
                 returnUrl: null

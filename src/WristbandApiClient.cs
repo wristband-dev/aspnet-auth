@@ -102,7 +102,7 @@ internal class WristbandApiClient : IWristbandApiClient
     /// Implements <see cref="IWristbandApiClient.GetTokens"/>.
     /// </summary>
     /// <inheritdoc />
-    public async Task<TokenResponse> GetTokens(string code, string redirectUri, string codeVerifier)
+    public async Task<WristbandTokenResponse> GetTokens(string code, string redirectUri, string codeVerifier)
     {
         var formParams = new Dictionary<string, string>
         {
@@ -127,7 +127,7 @@ internal class WristbandApiClient : IWristbandApiClient
 
             try
             {
-                var tokenErrorResponse = JsonSerializer.Deserialize<TokenResponseError>(errorResponseContent);
+                var tokenErrorResponse = JsonSerializer.Deserialize<WristbandTokenResponseError>(errorResponseContent);
                 if (tokenErrorResponse == null)
                 {
                     throw new InvalidOperationException("Failed to deserialize the token error response.");
@@ -149,7 +149,7 @@ internal class WristbandApiClient : IWristbandApiClient
 
         try
         {
-            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent);
+            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
             if (tokenResponse == null)
             {
                 throw new InvalidOperationException("Failed to deserialize the token response.");
@@ -176,14 +176,19 @@ internal class WristbandApiClient : IWristbandApiClient
         response.EnsureSuccessStatusCode();
 
         var responseContent = await response.Content.ReadAsStringAsync();
-        return new UserInfo(responseContent);
+
+        // Parse raw OIDC claims
+        var rawUserInfo = new RawUserInfo(responseContent);
+
+        // Map to friendly UserInfo
+        return UserInfoMapper.MapUserInfo(rawUserInfo);
     }
 
     /// <summary>
     /// Implements <see cref="IWristbandApiClient.RefreshToken"/>.
     /// </summary>
     /// <inheritdoc />
-    public async Task<TokenResponse> RefreshToken(string refreshToken)
+    public async Task<WristbandTokenResponse> RefreshToken(string refreshToken)
     {
         var formParams = new Dictionary<string, string>
         {
@@ -215,7 +220,7 @@ internal class WristbandApiClient : IWristbandApiClient
             }
 
             var responseContent = await response.Content.ReadAsStringAsync();
-            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(responseContent);
+            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
 
             if (tokenResponse == null)
             {
@@ -257,10 +262,9 @@ internal class WristbandApiClient : IWristbandApiClient
             var response = await _httpClient.SendAsync(request);
             response.EnsureSuccessStatusCode();
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            // No need to block logout execution if revoking fails
-            Console.Error.WriteLine($"Failed to refresh token due to: {ex.Message}\nStack Trace: {ex.StackTrace}");
+            // Ignore revoke errors; logout should still succeed
         }
     }
 

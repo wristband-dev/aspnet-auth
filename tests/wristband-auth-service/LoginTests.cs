@@ -85,8 +85,8 @@ public class LoginTests
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
             LoginStateSecret = _defaultConfig.LoginStateSecret,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             ParseTenantFromRootDomain = "example.com",
             AutoConfigureEnabled = false,
@@ -111,8 +111,8 @@ public class LoginTests
             ClientId = _defaultConfig.ClientId,
             ClientSecret = _defaultConfig.ClientSecret,
             LoginStateSecret = _defaultConfig.LoginStateSecret,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             ParseTenantFromRootDomain = "example.com",
             AutoConfigureEnabled = false,
@@ -121,7 +121,7 @@ public class LoginTests
 
         var httpContext = TestUtils.setupHttpContext(
             "tenant1.example.com",
-            "tenant_domain=tenant2"); // Should be ignored in favor of subdomain
+            "tenant_name=tenant2"); // Should be ignored in favor of subdomain
 
         var result = await service.Login(httpContext, null);
 
@@ -130,7 +130,7 @@ public class LoginTests
     }
 
     [Fact]
-    public async Task Login_WithTenantDomainQueryParam_ReturnsCorrectUrl()
+    public async Task Login_WithTenantNameQueryParam_ReturnsCorrectUrl()
     {
         var config = new WristbandAuthConfig
         {
@@ -144,14 +144,10 @@ public class LoginTests
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
-        var tenantDomain = "mytenant";
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain={tenantDomain}");
-
+        var tenantName = "mytenant";
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantName}");
         var result = await service.Login(httpContext, null);
-
-        var expectedUrl = $"https://{tenantDomain}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize";
+        var expectedUrl = $"https://{tenantName}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize";
         Assert.StartsWith(expectedUrl, result);
 
         var uri = new Uri(result);
@@ -169,22 +165,18 @@ public class LoginTests
         var loginConfig = new LoginConfig { DefaultTenantCustomDomain = defaultCustomDomain };
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
-
         var result = await service.Login(httpContext, loginConfig);
-
         Assert.StartsWith($"https://{defaultCustomDomain}/api/v1/oauth2/authorize?", result);
     }
 
     [Fact]
-    public async Task Login_WithDefaultTenantDomainName_UsesDefaultWhenNoOtherDomainSpecified()
+    public async Task Login_WithDefaultTenantName_UsesDefaultWhenNoOtherDomainSpecified()
     {
         var defaultTenantName = "default-tenant";
-        var loginConfig = new LoginConfig { DefaultTenantDomainName = defaultTenantName };
+        var loginConfig = new LoginConfig { DefaultTenantName = defaultTenantName };
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
-
         var result = await service.Login(httpContext, loginConfig);
-
         Assert.StartsWith($"https://{defaultTenantName}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
     }
 
@@ -203,28 +195,20 @@ public class LoginTests
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
-        var tenantDomain = "tenant1";
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain={tenantDomain}");
-
+        var tenantName = "tenant1";
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantName}");
         var result = await service.Login(httpContext, null);
-
-        Assert.Contains($"{tenantDomain}.{config.WristbandApplicationVanityDomain}", result);
+        Assert.Contains($"{tenantName}.{config.WristbandApplicationVanityDomain}", result);
     }
 
     [Fact]
     public async Task Login_WithoutCustomDomains_UsesHyphenSeparator()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        var tenantDomain = "tenant1";
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain={tenantDomain}");
-
+        var tenantName = "tenant1";
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantName}");
         var result = await service.Login(httpContext, null);
-
-        Assert.Contains($"{tenantDomain}-{_defaultConfig.WristbandApplicationVanityDomain}", result);
+        Assert.Contains($"{tenantName}-{_defaultConfig.WristbandApplicationVanityDomain}", result);
     }
 
     [Fact]
@@ -234,7 +218,7 @@ public class LoginTests
         var loginHint = "user@example.com";
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            $"tenant_domain=tenant1&login_hint={Uri.EscapeDataString(loginHint)}");
+            $"tenant_name=tenant1&login_hint={Uri.EscapeDataString(loginHint)}");
 
         var result = await service.Login(httpContext, null);
 
@@ -256,15 +240,12 @@ public class LoginTests
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            "tenant_domain=tenant1");
-
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=tenant1");
         var result = await service.Login(httpContext, null);
-
         var uri = new Uri(result);
         var query = HttpUtility.ParseQueryString(uri.Query);
         var scopes = query["scope"]?.Split(' ') ?? Array.Empty<string>();
+
         Assert.Contains("openid", scopes);
         Assert.Contains("offline_access", scopes);
         Assert.Contains("email", scopes);
@@ -278,11 +259,7 @@ public class LoginTests
         var service = SetupWristbandAuthService(_defaultConfig);
         var configReturnUrl = "/config-dashboard";
         var loginConfig = new LoginConfig { ReturnUrl = configReturnUrl };
-
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain=tenant1&return_url=/query-dashboard");
-
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url=/query-dashboard");
         var result = await service.Login(httpContext, loginConfig);
 
         // Just verify the URL was generated successfully
@@ -293,11 +270,7 @@ public class LoginTests
     public async Task Login_WithReturnUrlFromQueryParam_UsesQueryValue()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain=tenant1&return_url=/dashboard");
-
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url=/dashboard");
         var result = await service.Login(httpContext, null);
 
         // Just verify the URL was generated successfully
@@ -308,13 +281,10 @@ public class LoginTests
     public async Task Login_WithMultipleReturnUrlParams_ThrowsArgumentException()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            "tenant_domain=tenant1&return_url=/dashboard&return_url=/profile");
-
-        var ex = await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.Login(httpContext, null));
+            "tenant_name=tenant1&return_url=/dashboard&return_url=/profile");
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => service.Login(httpContext, null));
 
         Assert.Contains("More than one [return_url] query parameter was encountered", ex.Message);
     }
@@ -325,9 +295,7 @@ public class LoginTests
         var service = SetupWristbandAuthService(_defaultConfig);
         // Create a return URL longer than 450 characters
         var longReturnUrl = "/dashboard/" + new string('a', 450);
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain=tenant1&return_url={longReturnUrl}");
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url={longReturnUrl}");
 
         // Suppress console output during test
         var originalOut = Console.Out;
@@ -353,10 +321,7 @@ public class LoginTests
         var returnUrl = "/dashboard/" + new string('a', 439);
         Assert.Equal(450, returnUrl.Length);
 
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            $"tenant_domain=tenant1&return_url={returnUrl}");
-
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url={returnUrl}");
         var result = await service.Login(httpContext, null);
 
         // Should generate URL successfully
@@ -373,11 +338,7 @@ public class LoginTests
             { "source", "login_test" }
         };
         var loginConfig = new LoginConfig { CustomState = customState };
-
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            "tenant_domain=tenant1");
-
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=tenant1");
         var result = await service.Login(httpContext, loginConfig);
 
         // Should generate URL successfully with custom state
@@ -390,11 +351,7 @@ public class LoginTests
         var service = SetupWristbandAuthService(_defaultConfig);
         var emptyCustomState = new Dictionary<string, object>();
         var loginConfig = new LoginConfig { CustomState = emptyCustomState };
-
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            "tenant_domain=tenant1");
-
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=tenant1");
         var result = await service.Login(httpContext, loginConfig);
 
         // Should generate URL successfully
@@ -419,9 +376,7 @@ public class LoginTests
         var returnUrl = "/dashboard";
         var loginConfig = new LoginConfig { ReturnUrl = returnUrl };
         var httpContext = TestUtils.setupHttpContext("app.example.com");
-
         var result = await service.Login(httpContext, loginConfig);
-
         var expectedUrl = $"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}&state={Uri.EscapeDataString(returnUrl)}";
         Assert.Equal(expectedUrl, result);
     }
@@ -444,11 +399,67 @@ public class LoginTests
         var returnUrl = "/profile";
         var loginConfig = new LoginConfig { ReturnUrl = returnUrl };
         var httpContext = TestUtils.setupHttpContext("app.example.com");
-
         var result = await service.Login(httpContext, loginConfig);
-
         Assert.Equal($"https://custom.example.com/login?client_id={config.ClientId}&state={Uri.EscapeDataString(returnUrl)}", result);
     }
+
+    ////////////////////////////////////////////////////////
+    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
+    ////////////////////////////////////////////////////////
+
+    [Fact]
+    public async Task Login_WithTenantDomainToken_BackwardsCompat()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = "https://{tenant_domain}.example.com/login",
+            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+
+        var httpContext = TestUtils.setupHttpContext("tenant1.example.com");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Contains("tenant1", result);
+        Assert.StartsWith("https://tenant1", result);
+    }
+
+    [Fact]
+    public async Task Login_WithTenantCustomDomainUsingTenantDomainToken_BackwardsCompat()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = "https://{tenant_domain}.example.com/login",
+            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+        var customDomain = "tenant.custom.com";
+
+        var httpContext = TestUtils.setupHttpContext(
+            "tenant1.example.com",
+            $"tenant_custom_domain={customDomain}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith($"https://{customDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    ////////////////////////////////////////////////////////
+    /// HELPERS
+    ////////////////////////////////////////////////////////
 
     private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {

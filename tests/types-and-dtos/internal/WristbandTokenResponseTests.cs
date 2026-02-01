@@ -2,12 +2,12 @@ using System.Text.Json;
 
 namespace Wristband.AspNet.Auth.Tests
 {
-    public class TokenResponseTests
+    public class WristbandTokenResponseTests
     {
         [Fact]
         public void Constructor_ShouldInitializeWithDefaultValues()
         {
-            var tokenResponse = new TokenResponse();
+            var tokenResponse = new WristbandTokenResponse();
 
             Assert.NotNull(tokenResponse);
             Assert.Equal(string.Empty, tokenResponse.AccessToken);
@@ -21,7 +21,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Properties_ShouldAllowModification()
         {
-            var tokenResponse = new TokenResponse();
+            var tokenResponse = new WristbandTokenResponse();
 
             tokenResponse.AccessToken = "access123";
             tokenResponse.ExpiresIn = 3600;
@@ -41,7 +41,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Should_SerializeCorrectly()
         {
-            var tokenResponse = new TokenResponse
+            var tokenResponse = new WristbandTokenResponse
             {
                 AccessToken = "access123",
                 ExpiresIn = 3600,
@@ -66,7 +66,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             string json = "{\"access_token\":\"access123\",\"expires_in\":3600,\"id_token\":\"id123\",\"refresh_token\":\"refresh123\",\"scope\":\"openid profile\",\"token_type\":\"Bearer\"}";
 
-            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
+            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(json);
 
             Assert.NotNull(tokenResponse);
             Assert.Equal("access123", tokenResponse.AccessToken);
@@ -82,7 +82,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             string json = "{\"access_token\":\"access123\",\"expires_in\":3600,\"id_token\":\"id123\",\"scope\":\"openid profile\",\"token_type\":\"Bearer\"}";
 
-            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
+            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(json);
 
             Assert.NotNull(tokenResponse);
             Assert.Equal("access123", tokenResponse.AccessToken);
@@ -98,7 +98,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             string json = "{}";
 
-            var tokenResponse = JsonSerializer.Deserialize<TokenResponse>(json);
+            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(json);
 
             Assert.NotNull(tokenResponse);
             Assert.Equal(string.Empty, tokenResponse.AccessToken);

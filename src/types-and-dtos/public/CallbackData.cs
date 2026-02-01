@@ -15,7 +15,7 @@ public class CallbackData : TokenData
         idToken: "empty",
         refreshToken: null,
         userinfo: UserInfo.Empty,
-        tenantDomainName: "empty",
+        tenantName: "empty",
         tenantCustomDomain: null,
         customState: null,
         returnUrl: null);
@@ -29,7 +29,7 @@ public class CallbackData : TokenData
     /// <param name="idToken">The ID token.</param>
     /// <param name="refreshToken">The refresh token (optional).</param>
     /// <param name="userinfo">The user information.</param>
-    /// <param name="tenantDomainName">The domain name of the tenant the user belongs to.</param>
+    /// <param name="tenantName">The name of the tenant the user belongs to.</param>
     /// <param name="tenantCustomDomain">The custom domain of the tenant (optional).</param>
     /// <param name="customState">Custom state data received in the callback (optional).</param>
     /// <param name="returnUrl">The URL to return to after authentication (optional).</param>
@@ -41,7 +41,7 @@ public class CallbackData : TokenData
         string idToken,
         string? refreshToken,
         UserInfo userinfo,
-        string tenantDomainName,
+        string tenantName,
         string? tenantCustomDomain,
         Dictionary<string, object>? customState,
         string? returnUrl)
@@ -52,13 +52,13 @@ public class CallbackData : TokenData
             throw new InvalidOperationException("[Userinfo] cannot be null.");
         }
 
-        if (string.IsNullOrEmpty(tenantDomainName))
+        if (string.IsNullOrEmpty(tenantName))
         {
-            throw new InvalidOperationException("[TenantDomainName] cannot be null or empty.");
+            throw new InvalidOperationException("[TenantName] cannot be null or empty.");
         }
 
         Userinfo = userinfo;
-        TenantDomainName = tenantDomainName;
+        TenantName = tenantName;
         TenantCustomDomain = tenantCustomDomain;
         CustomState = customState;
         ReturnUrl = returnUrl;
@@ -80,9 +80,9 @@ public class CallbackData : TokenData
     public string? ReturnUrl { get; }
 
     /// <summary>
-    /// Gets the domain name of the tenant (or subdomain) the user belongs to.
+    /// Gets the name of the tenant the user belongs to.
     /// </summary>
-    public string TenantDomainName { get; }
+    public string TenantName { get; }
 
     /// <summary>
     /// Gets the custom domain of the tenant the user belongs to (optional).

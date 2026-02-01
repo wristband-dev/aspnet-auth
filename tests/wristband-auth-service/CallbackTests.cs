@@ -1,6 +1,5 @@
 using System.Reflection;
 using System.Security.Cryptography;
-using System.Text.Json;
 
 using Microsoft.AspNetCore.Http;
 
@@ -61,37 +60,83 @@ public class CallbackTests
     }
 
     [Fact]
-    public async Task Callback_WithInvalidState_ReturnsRedirectRequired()
+    public async Task Callback_WithMissingLoginStateCookie_ReturnsRedirectRequiredWithMissingLoginStateReason()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            "state=invalidstate&code=testcode&tenant_domain=tenant1");
+            "state=teststate&code=testcode&tenant_name=tenant1");
+
+        _mockLoginStateHandler
+            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>()))
+            .Returns((string?)null!);
+
+        var result = await service.Callback(httpContext);
+
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
+        Assert.NotEmpty(result.RedirectUrl);
+        Assert.Equal(CallbackData.Empty, result.CallbackData);
+        Assert.Equal(CallbackFailureReason.MissingLoginState, result.Reason);
+    }
+
+    [Fact]
+    public async Task Callback_WithInvalidState_ReturnsRedirectRequiredWithInvalidLoginStateReason()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "state=invalidstate&code=testcode&tenant_name=tenant1");
 
         SetupLoginStateMock("differentstate", "verifier123");
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
         Assert.NotEmpty(result.RedirectUrl);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
+        Assert.Equal(CallbackFailureReason.InvalidLoginState, result.Reason);
     }
 
     [Fact]
-    public async Task Callback_WithLoginRequiredError_ReturnsRedirectRequired()
+    public async Task Callback_WithNullLoginState_ReturnsRedirectRequiredWithInvalidLoginStateReason()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            "state=teststate&error=login_required&tenant_domain=tenant1");
+            "state=teststate&code=testcode&tenant_name=tenant1");
+
+        _mockLoginStateHandler
+            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>()))
+            .Returns("encryptedstate");
+
+        _mockLoginStateHandler
+            .Setup(x => x.DecryptLoginState(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns((LoginState)null!);
+
+        var result = await service.Callback(httpContext);
+
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
+        Assert.NotEmpty(result.RedirectUrl);
+        Assert.Equal(CallbackData.Empty, result.CallbackData);
+        Assert.Equal(CallbackFailureReason.InvalidLoginState, result.Reason);
+    }
+
+    [Fact]
+    public async Task Callback_WithLoginRequiredError_ReturnsRedirectRequiredWithLoginRequiredReason()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "state=teststate&error=login_required&tenant_name=tenant1");
 
         SetupLoginStateMock("teststate", "verifier123");
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
         Assert.NotEmpty(result.RedirectUrl);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
+        Assert.Equal(CallbackFailureReason.LoginRequired, result.Reason);
     }
 
     [Fact]
@@ -100,7 +145,7 @@ public class CallbackTests
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            "state=teststate&error=invalid_request&error_description=test_error&tenant_domain=tenant1");
+            "state=teststate&error=invalid_request&error_description=test_error&tenant_name=tenant1");
 
         SetupLoginStateMock("teststate", "verifier123");
 
@@ -114,29 +159,23 @@ public class CallbackTests
     public async Task Callback_WithMissingCode_ThrowsArgumentException()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            "state=teststate&tenant_domain=tenant1");
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "state=teststate&tenant_name=tenant1");
 
         SetupLoginStateMock("teststate", "verifier123");
 
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            service.Callback(httpContext));
+        await Assert.ThrowsAsync<ArgumentException>(() => service.Callback(httpContext));
     }
 
     [Fact]
-    public async Task Callback_WithMissingTenantDomain_ThrowsWristbandError()
+    public async Task Callback_WithMissingTenantName_ThrowsWristbandError()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        var httpContext = TestUtils.setupHttpContext(
-            "app.example.com",
-            "state=teststate&code=testcode");
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "state=teststate&code=testcode");
 
         SetupLoginStateMock("teststate", "verifier123");
 
-        var ex = await Assert.ThrowsAsync<WristbandError>(() =>
-            service.Callback(httpContext));
-        Assert.Equal("missing_tenant_domain", ex.Error);
+        var ex = await Assert.ThrowsAsync<WristbandError>(() => service.Callback(httpContext));
+        Assert.Equal("missing_tenant_name", ex.Error);
     }
 
     [Fact]
@@ -145,18 +184,19 @@ public class CallbackTests
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            "state=teststate&code=testcode&tenant_domain=tenant1");
+            "state=teststate&code=testcode&tenant_name=tenant1");
 
         SetupLoginStateMock("teststate", "verifier123");
         SetupApiClientMock();
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.COMPLETED, result.Type);
+        Assert.Equal(CallbackResultType.Completed, result.Type);
         Assert.NotNull(result.CallbackData);
         Assert.Empty(result.RedirectUrl);
-        Assert.Equal("tenant1", result.CallbackData.TenantDomainName);
+        Assert.Equal("tenant1", result.CallbackData.TenantName);
         Assert.NotNull(result.CallbackData.Userinfo);
+        Assert.Null(result.Reason);
     }
 
     [Fact]
@@ -166,25 +206,26 @@ public class CallbackTests
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            $"state=teststate&code=testcode&tenant_domain=tenant1&tenant_custom_domain={customDomain}");
+            $"state=teststate&code=testcode&tenant_name=tenant1&tenant_custom_domain={customDomain}");
 
         SetupLoginStateMock("teststate", "verifier123");
         SetupApiClientMock();
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.COMPLETED, result.Type);
+        Assert.Equal(CallbackResultType.Completed, result.Type);
         Assert.NotNull(result.CallbackData);
         Assert.Equal(customDomain, result.CallbackData.TenantCustomDomain);
+        Assert.Null(result.Reason);
     }
 
     [Fact]
-    public async Task Callback_WhenTokenExchangeFails_ReturnsRedirectRequired()
+    public async Task Callback_WhenTokenExchangeFails_ReturnsRedirectRequiredWithInvalidGrantReason()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
         var httpContext = TestUtils.setupHttpContext(
             "app.example.com",
-            "state=teststate&code=testcode&tenant_domain=tenant1");
+            "state=teststate&code=testcode&tenant_name=tenant1");
 
         SetupLoginStateMock("teststate", "verifier123");
 
@@ -197,19 +238,75 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
-        Assert.Equal($"{_defaultConfig.LoginUrl}?tenant_domain=tenant1", result.RedirectUrl);
+        Assert.Equal($"{_defaultConfig.LoginUrl}?tenant_name=tenant1", result.RedirectUrl);
+        Assert.Equal(CallbackFailureReason.InvalidGrant, result.Reason);
 
-        _mockApiClient.Verify(x => x.GetTokens(
-            "testcode",
-            _defaultConfig.RedirectUri!,
-            "verifier123"
-        ), Times.Once);
+        _mockApiClient.Verify(x => x.GetTokens("testcode", _defaultConfig.RedirectUri!, "verifier123"), Times.Once);
     }
 
     [Fact]
     public async Task Callback_WithTenantSubdomains_ConstructsCorrectRedirectUrl()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+        var httpContext = TestUtils.setupHttpContext(
+            "tenant1.example.com",
+            "state=teststate&code=testcode");
+
+        SetupLoginStateMock("teststate", "verifier123");
+
+        _mockApiClient
+            .Setup(x => x.GetTokens(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .ThrowsAsync(new InvalidGrantError("Token exchange failed"));
+
+        var result = await service.Callback(httpContext);
+
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
+        Assert.Equal(CallbackData.Empty, result.CallbackData);
+        Assert.Equal(CallbackFailureReason.InvalidGrant, result.Reason);
+
+        var expectedUrl = "https://tenant1.example.com/login";
+        Assert.Equal(expectedUrl, result.RedirectUrl);
+    }
+
+    [Fact]
+    public async Task Callback_CompletedResult_HasNullReason()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "state=teststate&code=testcode&tenant_name=tenant1");
+
+        SetupLoginStateMock("teststate", "verifier123");
+        SetupApiClientMock();
+
+        var result = await service.Callback(httpContext);
+
+        Assert.Equal(CallbackResultType.Completed, result.Type);
+        Assert.Null(result.Reason);
+    }
+
+    ////////////////////////////////////////////////////////
+    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
+    ////////////////////////////////////////////////////////
+
+    [Fact]
+    public async Task Callback_WithTenantDomainToken_ConstructsCorrectRedirectUrl_BackwardsCompat()
     {
         var config = new WristbandAuthConfig
         {
@@ -238,12 +335,17 @@ public class CallbackTests
 
         var result = await service.Callback(httpContext);
 
-        Assert.Equal(CallbackResultType.REDIRECT_REQUIRED, result.Type);
+        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
         Assert.Equal(CallbackData.Empty, result.CallbackData);
+        Assert.Equal(CallbackFailureReason.InvalidGrant, result.Reason);
 
         var expectedUrl = "https://tenant1.example.com/login";
         Assert.Equal(expectedUrl, result.RedirectUrl);
     }
+
+    ////////////////////////////////////////////////////////
+    /// HELPERS
+    ////////////////////////////////////////////////////////
 
     private void SetupLoginStateMock(string state, string codeVerifier)
     {
@@ -269,7 +371,7 @@ public class CallbackTests
 
     private void SetupApiClientMock()
     {
-        var tokenResponse = new TokenResponse
+        var tokenResponse = new WristbandTokenResponse
         {
             AccessToken = "test_access_token",
             ExpiresIn = 3600,
@@ -279,12 +381,14 @@ public class CallbackTests
             TokenType = "Bearer"
         };
 
-        string jsonString = JsonSerializer.Serialize(new Dictionary<string, object>
+        var userInfo = new UserInfo
         {
-            { "sub", "user123" },
-            { "email", "test@example.com" }
-        });
-        var userInfo = new UserInfo(jsonString);
+            UserId = "user123",
+            TenantId = "test_tenant_id",
+            ApplicationId = "test_app_id",
+            IdentityProviderName = "Wristband",
+            Email = "test@example.com"
+        };
 
         _mockApiClient
             .Setup(x => x.GetTokens(

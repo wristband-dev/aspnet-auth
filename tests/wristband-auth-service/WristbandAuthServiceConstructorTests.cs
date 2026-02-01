@@ -166,18 +166,18 @@ public class WristbandAuthServiceConstructorTests
     }
 
     // ////////////////////////////////////
-    //  TENANT DOMAIN TOKEN VALIDATION
+    //  TENANT NAME TOKEN VALIDATION
     // ////////////////////////////////////
 
     [Fact]
     public void Constructor_ShouldThrowArgumentException_WhenLoginUrlHasToken_ButNoTenantParsing()
     {
         var config = CreateValidConfig();
-        config.LoginUrl = "https://{tenant_domain}.example.com/login";
+        config.LoginUrl = "https://{tenant_name}.example.com/login";
         config.ParseTenantFromRootDomain = null; // No tenant parsing
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("tenant_name", ex.Message);
         Assert.Contains("LoginUrl", ex.Message);
     }
 
@@ -185,11 +185,11 @@ public class WristbandAuthServiceConstructorTests
     public void Constructor_ShouldThrowArgumentException_WhenRedirectUriHasToken_ButNoTenantParsing()
     {
         var config = CreateValidConfig();
-        config.RedirectUri = "https://{tenant_domain}.example.com/callback";
+        config.RedirectUri = "https://{tenant_name}.example.com/callback";
         config.ParseTenantFromRootDomain = null; // No tenant parsing
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("tenant_name", ex.Message);
         Assert.Contains("RedirectUri", ex.Message);
     }
 
@@ -201,7 +201,7 @@ public class WristbandAuthServiceConstructorTests
         config.ParseTenantFromRootDomain = "example.com"; // Tenant parsing enabled
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("tenant_name", ex.Message);
         Assert.Contains("LoginUrl", ex.Message);
     }
 
@@ -209,12 +209,12 @@ public class WristbandAuthServiceConstructorTests
     public void Constructor_ShouldThrowArgumentException_WhenTenantParsing_ButRedirectUriMissingToken()
     {
         var config = CreateValidConfig();
-        config.LoginUrl = "https://{tenant_domain}.example.com/login"; // Has token
+        config.LoginUrl = "https://{tenant_name}.example.com/login"; // Has token
         config.RedirectUri = "https://example.com/callback"; // Missing token
         config.ParseTenantFromRootDomain = "example.com"; // Tenant parsing enabled
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("tenant_name", ex.Message);
         Assert.Contains("RedirectUri", ex.Message);
     }
 
@@ -268,7 +268,7 @@ public class WristbandAuthServiceConstructorTests
         };
 
         var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
-        Assert.Contains("tenant_domain", ex.Message);
+        Assert.Contains("tenant_name", ex.Message);
     }
 
     // ////////////////////////////////////
@@ -284,8 +284,8 @@ public class WristbandAuthServiceConstructorTests
             ClientSecret = "valid-client-secret",
             WristbandApplicationVanityDomain = "example.wristband.dev",
             AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
             ParseTenantFromRootDomain = "example.com",
             LoginStateSecret = new string('a', 32)
         };
@@ -370,6 +370,53 @@ public class WristbandAuthServiceConstructorTests
     {
         var config = CreateValidConfig();
         config.Scopes = null; // Null should use defaults
+
+        var service = new WristbandAuthService(config);
+        Assert.NotNull(service);
+    }
+
+    ////////////////////////////////////////////////////////
+    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
+    ////////////////////////////////////////////////////////
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenLoginUrlHasTenantDomainToken_ButNoTenantParsing_BackwardsCompat()
+    {
+        var config = CreateValidConfig();
+        config.LoginUrl = "https://{tenant_domain}.example.com/login";
+        config.ParseTenantFromRootDomain = null; // No tenant parsing
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_name", ex.Message);
+        Assert.Contains("LoginUrl", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldThrowArgumentException_WhenRedirectUriHasTenantDomainToken_ButNoTenantParsing_BackwardsCompat()
+    {
+        var config = CreateValidConfig();
+        config.RedirectUri = "https://{tenant_domain}.example.com/callback";
+        config.ParseTenantFromRootDomain = null; // No tenant parsing
+
+        var ex = Assert.Throws<ArgumentException>(() => new WristbandAuthService(config));
+        Assert.Contains("tenant_name", ex.Message);
+        Assert.Contains("RedirectUri", ex.Message);
+    }
+
+    [Fact]
+    public void Constructor_ShouldSucceed_WithValidTenantDomainTokenConfiguration_BackwardsCompat()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "valid-client-id",
+            ClientSecret = "valid-client-secret",
+            WristbandApplicationVanityDomain = "example.wristband.dev",
+            AutoConfigureEnabled = false,
+            LoginUrl = "https://{tenant_domain}.example.com/login",
+            RedirectUri = "https://{tenant_domain}.example.com/callback",
+            ParseTenantFromRootDomain = "example.com",
+            LoginStateSecret = new string('a', 32)
+        };
 
         var service = new WristbandAuthService(config);
         Assert.NotNull(service);
