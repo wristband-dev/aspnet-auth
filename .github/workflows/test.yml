@@ -18,7 +18,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        dotnet: ['6', '7', '8', '9']
+        dotnet: ['8', '9', '10']
         os: [ubuntu-latest, windows-latest]
     steps:
       - name: Checkout code
