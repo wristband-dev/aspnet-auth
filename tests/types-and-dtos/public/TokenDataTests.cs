@@ -5,17 +5,13 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_ShouldInitializeProperties_WhenValidArgumentsProvided()
         {
-            // Arrange
             var accessToken = "testAccessToken";
             var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
             var expiresIn = 3600;
             var idToken = "testIdToken";
             var refreshToken = "testRefreshToken";
-
-            // Act
             var tokenData = new TokenData(accessToken, expiresAt, expiresIn, idToken, refreshToken);
 
-            // Assert
             Assert.Equal(accessToken, tokenData.AccessToken);
             Assert.Equal(expiresAt, tokenData.ExpiresAt);
             Assert.Equal(expiresIn, tokenData.ExpiresIn);
@@ -26,16 +22,12 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_ShouldInitializeProperties_WhenRefreshTokenIsNull()
         {
-            // Arrange
             var accessToken = "testAccessToken";
             var expiresAt = DateTimeOffset.UtcNow.AddHours(1).ToUnixTimeMilliseconds();
             var expiresIn = 3600;
             var idToken = "testIdToken";
-
-            // Act
             var tokenData = new TokenData(accessToken, expiresAt, expiresIn, idToken, null);
 
-            // Assert
             Assert.Equal(accessToken, tokenData.AccessToken);
             Assert.Equal(expiresAt, tokenData.ExpiresAt);
             Assert.Equal(expiresIn, tokenData.ExpiresIn);
@@ -86,30 +78,23 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_ShouldAllowZeroExpiresAt()
         {
-            // Act & Assert - should not throw
             var tokenData = new TokenData("validAccessToken", 0, 3600, "validIdToken", "validRefreshToken");
-
             Assert.Equal(0, tokenData.ExpiresAt);
         }
 
         [Fact]
         public void Constructor_ShouldAllowZeroExpiresIn()
         {
-            // Act & Assert - should not throw
             var tokenData = new TokenData("validAccessToken", 1234567890000, 0, "validIdToken", "validRefreshToken");
-
             Assert.Equal(0, tokenData.ExpiresIn);
         }
 
         [Fact]
         public void Constructor_ShouldAllowLargeExpiresAtValue()
         {
-            // Arrange - test with a large timestamp (year 2050)
-            var largeExpiresAt = 2524608000000L; // January 1, 2050
-
-            // Act & Assert - should not throw
+            // Test with a large timestamp
+            var largeExpiresAt = 8524608000000L;
             var tokenData = new TokenData("validAccessToken", largeExpiresAt, 3600, "validIdToken", "validRefreshToken");
-
             Assert.Equal(largeExpiresAt, tokenData.ExpiresAt);
         }
     }

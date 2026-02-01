@@ -1,15 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0</TargetFrameworks>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="6.0.0" Condition="'$(TargetFramework)' == 'net6.0'" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="7.0.0" Condition="'$(TargetFramework)' == 'net7.0'" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" Condition="'$(TargetFramework)' == 'net8.0'" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" Condition="'$(TargetFramework)' == 'net9.0'" />
+    <PackageReference Include="Wristband.AspNet.Auth.Jwt" Version="1.0.0" />
     <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
@@ -24,7 +21,7 @@
   <PropertyGroup>
     <PackageId>Wristband.AspNet.Auth</PackageId>
     <Product>Wristband Authentication SDK for ASP.NET</Product>
-    <Description>SDK for integrating your ASP.NET web application with Wristband. Handles user authentication and token management.</Description>
+    <Description>SDK for integrating your ASP.NET web application with Wristband. Handles user authentication, session management, and token management.</Description>
     <Copyright>Apitopia, Inc.</Copyright>
     <NeutralLanguage>en-US</NeutralLanguage>
     <Authors>Wristband</Authors>
@@ -45,7 +42,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <Version>3.0.0</Version>
+    <Version>4.0.0</Version>
   </PropertyGroup>
 
   <PropertyGroup>

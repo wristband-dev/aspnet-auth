@@ -5,12 +5,12 @@ namespace Wristband.AspNet.Auth;
 /// <summary>
 /// Represents the token response received from the Wristband Token Endpoint.
 /// </summary>
-internal class TokenResponse
+internal class WristbandTokenResponse
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="TokenResponse"/> class.
+    /// Initializes a new instance of the <see cref="WristbandTokenResponse"/> class.
     /// </summary>
-    public TokenResponse()
+    public WristbandTokenResponse()
     {
     }
 

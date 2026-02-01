@@ -215,6 +215,10 @@ PublishScripts/
 # NuGet v3's project.json files produces more ignorable files
 *.nuget.props
 *.nuget.targets
+# NuGet.config is used to configure NuGet package sources, credentials, and other settings.
+# This rule ensures that any local or private NuGet.config file (often containing sensitive
+# information) is ignored in version control, preventing accidental commits of private configurations.
+**/NuGet.config
 
 # Microsoft Azure Build Output
 csx/

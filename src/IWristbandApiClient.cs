@@ -17,9 +17,9 @@ internal interface IWristbandApiClient
     /// <param name="code">The authorization code received from the OAuth2 authorization server.</param>
     /// <param name="redirectUri">The redirect URI that was specified in the auth request initially.</param>
     /// <param name="codeVerifier">The PKCE code verifier to prevent authorization code injection attacks.</param>
-    /// <returns>A <see cref="Task{TokenResponse}"/> representing the asynchronous operation. The result contains the access token, refresh token, and other OAuth2 credentials.</returns>
+    /// <returns>A <see cref="Task{WristbandTokenResponse}"/> representing the asynchronous operation. The result contains the access token, refresh token, and other OAuth2 credentials.</returns>
     /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
-    Task<TokenResponse> GetTokens(string code, string redirectUri, string codeVerifier);
+    Task<WristbandTokenResponse> GetTokens(string code, string redirectUri, string codeVerifier);
 
     /// <summary>
     /// Retrieves user information from the Wristband platform using the provided access token.
@@ -33,9 +33,9 @@ internal interface IWristbandApiClient
     /// Calls the Wristband Token Endpoint with the refresh token grant type to refresh an expired access token.
     /// </summary>
     /// <param name="refreshToken">The refresh token used to obtain a new access token.</param>
-    /// <returns>A <see cref="Task{TokenResponse}"/> representing the asynchronous operation. The result contains the refreshed access token, id token, and refresh token.</returns>
+    /// <returns>A <see cref="Task{WristbandTokenResponse}"/> representing the asynchronous operation. The result contains the refreshed access token, id token, and refresh token.</returns>
     /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
-    Task<TokenResponse> RefreshToken(string refreshToken);
+    Task<WristbandTokenResponse> RefreshToken(string refreshToken);
 
     /// <summary>
     /// Calls the Wristband Revoke Token Endpoint to revoke a refresh token.

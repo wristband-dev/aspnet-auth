@@ -78,7 +78,7 @@ public class SdkConfigurationTests
     public void LoginUrl_ShouldAcceptTenantDomainToken()
     {
         var config = new SdkConfiguration();
-        var loginUrl = "https://{tenant_domain}.myapp.com/login";
+        var loginUrl = "https://{tenant_name}.myapp.com/login";
 
         config.LoginUrl = loginUrl;
 
@@ -129,7 +129,7 @@ public class SdkConfigurationTests
     public void RedirectUri_ShouldAcceptTenantDomainToken()
     {
         var config = new SdkConfiguration();
-        var redirectUri = "https://{tenant_domain}.myapp.com/callback";
+        var redirectUri = "https://{tenant_name}.myapp.com/callback";
 
         config.RedirectUri = redirectUri;
 
@@ -197,5 +197,47 @@ public class SdkConfigurationTests
         Assert.Equal(string.Empty, config.LoginUrl);
         Assert.Null(config.LoginUrlTenantDomainSuffix);
         Assert.Equal(string.Empty, config.RedirectUri);
+    }
+
+    ////////////////////////////////////////////////////////
+    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
+    ////////////////////////////////////////////////////////
+
+    [Fact]
+    public void LoginUrl_ShouldAcceptTenantDomainToken_BackwardsCompat()
+    {
+        var config = new SdkConfiguration();
+        var loginUrl = "https://{tenant_domain}.myapp.com/login";
+        config.LoginUrl = loginUrl;
+        Assert.Equal(loginUrl, config.LoginUrl);
+    }
+
+    [Fact]
+    public void RedirectUri_ShouldAcceptTenantDomainToken_BackwardsCompat()
+    {
+        var config = new SdkConfiguration();
+        var redirectUri = "https://{tenant_domain}.myapp.com/callback";
+
+        config.RedirectUri = redirectUri;
+
+        Assert.Equal(redirectUri, config.RedirectUri);
+    }
+
+    [Fact]
+    public void JsonDeserialization_WithTenantDomainToken_BackwardsCompat()
+    {
+        var json = @"{
+            ""customApplicationLoginPageUrl"": null,
+            ""isApplicationCustomDomainActive"": false,
+            ""loginUrl"": ""https://{tenant_domain}.example.com/login"",
+            ""loginUrlTenantDomainSuffix"": "".example.com"",
+            ""redirectUri"": ""https://{tenant_domain}.example.com/callback""
+        }";
+
+        var config = JsonSerializer.Deserialize<SdkConfiguration>(json);
+
+        Assert.NotNull(config);
+        Assert.Equal("https://{tenant_domain}.example.com/login", config.LoginUrl);
+        Assert.Equal("https://{tenant_domain}.example.com/callback", config.RedirectUri);
     }
 }

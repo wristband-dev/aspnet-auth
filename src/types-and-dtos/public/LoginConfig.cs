@@ -17,17 +17,17 @@ public class LoginConfig
     /// </summary>
     /// <param name="customState">Custom state data for the login request.</param>
     /// <param name="defaultTenantCustomDomain">An optional default tenant custom domain to use for the login request.</param>
-    /// <param name="defaultTenantDomainName">An optional default tenant domain name to use for the login request.</param>
+    /// <param name="defaultTenantName">An optional default tenant name to use for the login request.</param>
     /// <param name="returnUrl">The URL to return to after authentication is completed.</param>
     public LoginConfig(
         Dictionary<string, object>? customState,
         string? defaultTenantCustomDomain,
-        string? defaultTenantDomainName,
+        string? defaultTenantName,
         string? returnUrl)
     {
         CustomState = customState;
         DefaultTenantCustomDomain = defaultTenantCustomDomain;
-        DefaultTenantDomainName = defaultTenantDomainName;
+        DefaultTenantName = defaultTenantName;
         ReturnUrl = returnUrl;
     }
 
@@ -42,9 +42,9 @@ public class LoginConfig
     public string? DefaultTenantCustomDomain { get; set; }
 
     /// <summary>
-    /// Gets or sets the optional default tenant domain name to use for the login request.
+    /// Gets or sets the optional default tenant name to use for the login request.
     /// </summary>
-    public string? DefaultTenantDomainName { get; set; }
+    public string? DefaultTenantName { get; set; }
 
     /// <summary>
     /// Gets or sets the URL to return to after authentication is completed. If a value is provided, then it takes precedence over the "return_url" request query parameter.

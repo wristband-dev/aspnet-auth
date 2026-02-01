@@ -5,10 +5,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_WithErrorDescription_SetsProperties()
         {
-            // Act
             var error = new TestInvalidGrantError("Test error description");
-
-            // Assert
             Assert.Equal("invalid_grant", error.Error);
             Assert.Equal("Test error description", error.ErrorDescription);
             Assert.Equal("invalid_grant", error.Message);
@@ -17,10 +14,7 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_WithNullErrorDescription_SetsEmptyString()
         {
-            // Act
             var error = new TestInvalidGrantError(null);
-
-            // Assert
             Assert.Equal("invalid_grant", error.Error);
             Assert.Equal(string.Empty, error.ErrorDescription);
         }
@@ -28,21 +22,15 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Constructor_InheritsFromWristbandError()
         {
-            // Act
             var error = new TestInvalidGrantError("Test description");
-
-            // Assert
             Assert.IsAssignableFrom<WristbandError>(error);
         }
 
         [Fact]
         public void Constructor_SetsPredefinedErrorCode()
         {
-            // Arrange & Act
             var error1 = new TestInvalidGrantError("Description 1");
             var error2 = new TestInvalidGrantError("Description 2");
-
-            // Assert
             Assert.Equal("invalid_grant", error1.Error);
             Assert.Equal("invalid_grant", error2.Error);
         }
@@ -50,10 +38,8 @@ namespace Wristband.AspNet.Auth.Tests
         [Fact]
         public void Exception_CanBeCaught()
         {
-            // Arrange
             bool exceptionCaught = false;
 
-            // Act
             try
             {
                 ThrowInvalidGrantError();
@@ -64,17 +50,14 @@ namespace Wristband.AspNet.Auth.Tests
                 Assert.Equal("invalid_grant", error.Error);
             }
 
-            // Assert
             Assert.True(exceptionCaught);
         }
 
         [Fact]
         public void Exception_CanBeCaughtSpecifically()
         {
-            // Arrange
             bool specificExceptionCaught = false;
 
-            // Act
             try
             {
                 ThrowInvalidGrantError();
@@ -85,7 +68,6 @@ namespace Wristband.AspNet.Auth.Tests
                 Assert.Equal("invalid_grant", error.Error);
             }
 
-            // Assert
             Assert.True(specificExceptionCaught);
         }
 

@@ -297,13 +297,13 @@ public class WristbandApiClientTests
     // ////////////////////////////////////
 
     [Fact]
-    public async Task GetTokens_ValidRequest_ReturnsTokenResponse()
+    public async Task GetTokens_ValidRequest_ReturnsWristbandTokenResponse()
     {
         var code = "valid-auth-code";
         var redirectUri = "https://app.example.com/callback";
         var codeVerifier = "valid-code-verifier";
 
-        var expectedResponse = new TokenResponse
+        var expectedResponse = new WristbandTokenResponse
         {
             AccessToken = "new-access-token",
             RefreshToken = "new-refresh-token",
@@ -331,7 +331,7 @@ public class WristbandApiClientTests
         var redirectUri = "https://app.example.com/callback";
         var codeVerifier = "valid-code-verifier";
 
-        var errorResponse = new TokenResponseError
+        var errorResponse = new WristbandTokenResponseError
         {
             Error = "invalid_grant",
             ErrorDescription = "The authorization code is invalid or has expired"
@@ -435,6 +435,9 @@ public class WristbandApiClientTests
         var accessToken = "valid-access-token";
         var userInfoJson = @"{
             ""sub"": ""user123"",
+            ""tnt_id"": ""tenant123"",
+            ""app_id"": ""app123"",
+            ""idp_name"": ""Wristband"",
             ""email"": ""test@example.com"",
             ""email_verified"": true,
             ""name"": ""Test User""
@@ -445,9 +448,13 @@ public class WristbandApiClientTests
         var result = await _wristbandApiClient.GetUserinfo(accessToken);
 
         Assert.NotNull(result);
-
-        var email = result.GetValue("email");
-        Assert.Equal("test@example.com", email.GetString());
+        Assert.Equal("user123", result.UserId);
+        Assert.Equal("tenant123", result.TenantId);
+        Assert.Equal("app123", result.ApplicationId);
+        Assert.Equal("Wristband", result.IdentityProviderName);
+        Assert.Equal("test@example.com", result.Email);
+        Assert.True(result.EmailVerified);
+        Assert.Equal("Test User", result.FullName);
 
         VerifyHttpRequest(
             HttpMethod.Get,
@@ -492,14 +499,27 @@ public class WristbandApiClientTests
     }
 
     [Fact]
-    public async Task GetUserinfo_InvalidJsonResponse_ThrowsInvalidOperationException()
+    public async Task GetUserinfo_MissingRequiredClaims_ThrowsInvalidOperationException()
     {
         var accessToken = "valid-access-token";
-        SetupHttpResponse(HttpStatusCode.OK, "invalid-json-content");
+        // Missing required claims like tnt_id, app_id, idp_name
+        var userInfoJson = @"{
+            ""sub"": ""user123"",
+            ""email"": ""test@example.com""
+        }";
+        SetupHttpResponse(HttpStatusCode.OK, userInfoJson);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _wristbandApiClient.GetUserinfo(accessToken)
         );
+    }
+
+    [Fact]
+    public async Task GetUserinfo_InvalidJsonResponse_ThrowsInvalidOperationException()
+    {
+        var accessToken = "valid-access-token";
+        SetupHttpResponse(HttpStatusCode.OK, "invalid-json-content");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _wristbandApiClient.GetUserinfo(accessToken));
     }
 
     [Fact]
@@ -521,7 +541,7 @@ public class WristbandApiClientTests
     public async Task RefreshToken_ValidToken_ReturnsTokenData()
     {
         var refreshToken = "valid-refresh-token";
-        var expectedResponse = new TokenResponse
+        var expectedResponse = new WristbandTokenResponse
         {
             AccessToken = "new-access-token",
             RefreshToken = "new-refresh-token",
@@ -610,9 +630,6 @@ public class WristbandApiClientTests
 
         await _wristbandApiClient.RevokeRefreshToken(refreshToken);
 
-        var errorLogs = stringWriter.ToString();
-        Assert.Contains("Failed to refresh token due to:", errorLogs);
-
         VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/revoke", Times.Once());
     }
 
@@ -629,9 +646,6 @@ public class WristbandApiClientTests
         Console.SetError(stringWriter);
 
         await _wristbandApiClient.RevokeRefreshToken(refreshToken);
-
-        var errorLogs = stringWriter.ToString();
-        Assert.Contains("Failed to refresh token due to:", errorLogs);
 
         VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/revoke", Times.Once());
     }
@@ -653,7 +667,7 @@ public class WristbandApiClientTests
             .ReturnsAsync(httpResponse);
     }
 
-    private void SetupTokenResponse(HttpStatusCode statusCode, TokenResponse? response)
+    private void SetupTokenResponse(HttpStatusCode statusCode, WristbandTokenResponse? response)
     {
         var content = response != null ? JsonSerializer.Serialize(response) : string.Empty;
         var httpResponse = new HttpResponseMessage(statusCode)

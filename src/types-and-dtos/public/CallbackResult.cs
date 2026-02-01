@@ -10,33 +10,47 @@ public class CallbackResult
     /// Initializes a new instance of the <see cref="CallbackResult"/> class.
     /// </summary>
     /// <param name="type">The type of result of the callback execution.</param>
-    /// <param name="callbackData">The callback data received after authentication (required only for COMPLETED result).</param>
-    /// <param name="redirectUrl">The URL to redirect to (required only for REDIRECT_REQUIRED result).</param>
-    /// <exception cref="ArgumentNullException">Thrown when callback data is null for the COMPLETED result or redirect URL is null for the REDIRECT_REQUIRED result.</exception>
-    public CallbackResult(CallbackResultType type, CallbackData? callbackData, string? redirectUrl)
+    /// <param name="callbackData">The callback data received after authentication (required only for Completed result).</param>
+    /// <param name="redirectUrl">The URL to redirect to (required only for RedirectRequired result).</param>
+    /// <param name="reason">Optional reason why a redirect is required (only for RedirectRequired result).</param>
+    /// <exception cref="ArgumentNullException">Thrown when callback data is null for the Completed result or redirect URL is null for the RedirectRequired result.</exception>
+    public CallbackResult(
+        CallbackResultType type,
+        CallbackData? callbackData,
+        string? redirectUrl,
+        CallbackFailureReason? reason = null)
     {
-        if (type == CallbackResultType.COMPLETED && callbackData == null)
+        if (type == CallbackResultType.Completed && callbackData == null)
         {
-            throw new ArgumentNullException(nameof(callbackData), "CallbackData cannot be null for COMPLETED result.");
+            throw new ArgumentNullException(nameof(callbackData), "CallbackData cannot be null for Completed result.");
         }
 
-        if (type == CallbackResultType.REDIRECT_REQUIRED && string.IsNullOrEmpty(redirectUrl))
+        if (type == CallbackResultType.RedirectRequired)
         {
-            throw new ArgumentNullException(nameof(redirectUrl), "RedirectUrl cannot be null for REDIRECT_REQUIRED result.");
+            if (string.IsNullOrEmpty(redirectUrl))
+            {
+                throw new ArgumentNullException(nameof(redirectUrl), "RedirectUrl cannot be null for RedirectRequired result.");
+            }
+
+            if (reason == null)
+            {
+                throw new ArgumentNullException(nameof(redirectUrl), "Reason cannot be null for RedirectRequired result.");
+            }
         }
 
         Type = type;
         CallbackData = callbackData ?? CallbackData.Empty;
         RedirectUrl = redirectUrl ?? string.Empty;
+        Reason = reason;
     }
 
     /// <summary>
-    /// Gets the callback data received after authentication (COMPLETED result only).
+    /// Gets the callback data received after authentication (Completed result only).
     /// </summary>
     public CallbackData CallbackData { get; }
 
     /// <summary>
-    /// Gets the URL to redirect to (REDIRECT_REQUIRED result only).
+    /// Gets the URL to redirect to (RedirectRequired result only).
     /// </summary>
     public string RedirectUrl { get; }
 
@@ -44,4 +58,9 @@ public class CallbackResult
     /// Gets the type of result of the callback execution.
     /// </summary>
     public CallbackResultType Type { get; }
+
+    /// <summary>
+    /// Gets the specific reason why a redirect is required (RedirectRequired result only).
+    /// </summary>
+    public CallbackFailureReason? Reason { get; }
 }

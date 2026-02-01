@@ -5,12 +5,12 @@ namespace Wristband.AspNet.Auth;
 /// <summary>
 /// Represents the error response received from the Wristband Token Endpoint in case of a failure.
 /// </summary>
-internal class TokenResponseError
+internal class WristbandTokenResponseError
 {
     /// <summary>
-    /// Initializes a new instance of the <see cref="TokenResponseError"/> class.
+    /// Initializes a new instance of the <see cref="WristbandTokenResponseError"/> class.
     /// </summary>
-    public TokenResponseError()
+    public WristbandTokenResponseError()
     {
     }
 

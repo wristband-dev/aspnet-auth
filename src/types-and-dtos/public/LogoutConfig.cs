@@ -19,19 +19,19 @@ public class LogoutConfig
     /// <param name="refreshToken">The refresh token to revoke during logout.</param>
     /// <param name="state">Optional value that will be appended as a query parameter to the resolved redirect URL.</param>
     /// <param name="tenantCustomDomain">The tenant custom domain for the tenant the user belongs to.</param>
-    /// <param name="tenantDomainName">The domain name of the tenant the user belongs to.</param>
+    /// <param name="tenantName">The name of the tenant the user belongs to.</param>
     public LogoutConfig(
         string? redirectUrl,
         string? refreshToken,
         string? state,
         string? tenantCustomDomain,
-        string? tenantDomainName)
+        string? tenantName)
     {
         RedirectUrl = redirectUrl;
         RefreshToken = refreshToken;
         State = state;
         TenantCustomDomain = tenantCustomDomain;
-        TenantDomainName = tenantDomainName;
+        TenantName = tenantName;
     }
 
     /// <summary>
@@ -55,7 +55,7 @@ public class LogoutConfig
     public string? TenantCustomDomain { get; set; }
 
     /// <summary>
-    /// Gets or sets the domain name of the tenant the user belongs to.
+    /// Gets or sets the name of the tenant the user belongs to.
     /// </summary>
-    public string? TenantDomainName { get; set; }
+    public string? TenantName { get; set; }
 }

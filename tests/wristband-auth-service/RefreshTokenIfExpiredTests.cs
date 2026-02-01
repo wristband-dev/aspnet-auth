@@ -55,15 +55,6 @@ public class RefreshTokenIfExpiredTests
     }
 
     [Fact]
-    public async Task RefreshTokenIfExpired_ZeroExpiresAt_ThrowsArgumentException()
-    {
-        var exception = await Assert.ThrowsAsync<ArgumentException>(
-            () => _wristbandAuthService.RefreshTokenIfExpired("valid-token", 0));
-
-        Assert.Equal("The expiresAt field must be a positive integer", exception.Message);
-    }
-
-    [Fact]
     public async Task RefreshTokenIfExpired_NegativeExpiresAt_ThrowsArgumentException()
     {
         var exception = await Assert.ThrowsAsync<ArgumentException>(
@@ -84,10 +75,35 @@ public class RefreshTokenIfExpiredTests
     }
 
     [Fact]
+    public async Task RefreshTokenIfExpired_ZeroExpiresAt_RefreshesToken()
+    {
+        var expectedTokenResponse = new WristbandTokenResponse
+        {
+            AccessToken = "newAccessToken",
+            ExpiresIn = 3600,
+            IdToken = "newIdToken",
+            RefreshToken = "newRefreshToken"
+        };
+
+        _mockApiClient
+            .Setup(m => m.RefreshToken("validRefreshToken"))
+            .ReturnsAsync(expectedTokenResponse);
+
+        var result = await _wristbandAuthService.RefreshTokenIfExpired("validRefreshToken", 0);
+
+        Assert.NotNull(result);
+        Assert.Equal("newAccessToken", result.AccessToken);
+        Assert.Equal("newIdToken", result.IdToken);
+        Assert.Equal("newRefreshToken", result.RefreshToken);
+        Assert.True(result.ExpiresAt > 0);
+        Assert.Equal(3540, result.ExpiresIn); // token buffer applied
+    }
+
+    [Fact]
     public async Task RefreshTokenIfExpired_Should_RefreshToken_When_AccessTokenExpired()
     {
         // Create expected token response using property initialization
-        var expectedTokenResponse = new TokenResponse
+        var expectedTokenResponse = new WristbandTokenResponse
         {
             AccessToken = "newAccessToken",
             ExpiresIn = 3600,
@@ -153,7 +169,7 @@ public class RefreshTokenIfExpiredTests
         _mockApiClient
             .SetupSequence(m => m.RefreshToken("validRefreshToken"))
             .ThrowsAsync(new WristbandError("unexpected_error", "Unexpected Error"))
-            .ReturnsAsync(new TokenResponse
+            .ReturnsAsync(new WristbandTokenResponse
             {
                 AccessToken = "newAccessToken",
                 ExpiresIn = 3600,
@@ -199,7 +215,7 @@ public class RefreshTokenIfExpiredTests
     public async Task RefreshTokenIfExpired_VerifyExpiresAtCalculation()
     {
         // Test that ExpiresAt is calculated correctly by the service
-        var mockTokenResponse = new TokenResponse
+        var mockTokenResponse = new WristbandTokenResponse
         {
             AccessToken = "accessToken",
             ExpiresIn = 3600,
@@ -254,7 +270,7 @@ public class RefreshTokenIfExpiredTests
         var fieldInfo = typeof(WristbandAuthService).GetField("_wristbandApiClient", BindingFlags.NonPublic | BindingFlags.Instance);
         fieldInfo?.SetValue(customService, _mockApiClient.Object);
 
-        var mockTokenResponse = new TokenResponse
+        var mockTokenResponse = new WristbandTokenResponse
         {
             AccessToken = "accessToken",
             ExpiresIn = 3600,

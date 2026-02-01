@@ -8,10 +8,10 @@ public enum CallbackResultType
     /// <summary>
     /// Indicates that the callback is successfully completed and data is available for creating a session.
     /// </summary>
-    COMPLETED,
+    Completed,
 
     /// <summary>
     /// Indicates that a redirect is required, generally to a login route or page.
     /// </summary>
-    REDIRECT_REQUIRED,
+    RedirectRequired,
 }

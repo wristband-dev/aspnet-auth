@@ -25,7 +25,7 @@ dotnet test --framework net9.0 --filter FullyQualifiedName~Wristband.AspNet.Auth
 ### Run Tests and Output Test Results
 
 ```dotnetcli
-dotnet test --framework net9.0 --collect:"XPlat Code Coverage"
+dotnet test --collect:"XPlat Code Coverage"
 ```
 
 ### Generate Code Coverage Report After Test Run

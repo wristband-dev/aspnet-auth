@@ -58,8 +58,8 @@ namespace Wristband.AspNet.Auth.Tests
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
                 LoginStateSecret = new string('a', 32),
-                LoginUrl = "https://{tenant_domain}.example.com/login",  // Fixed: Added {tenant_domain} token
-                RedirectUri = "https://{tenant_domain}.example.com/callback",  // Fixed: Added {tenant_domain} token
+                LoginUrl = "https://{tenant_name}.example.com/login",
+                RedirectUri = "https://{tenant_name}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
                 ParseTenantFromRootDomain = "example.com",
                 AutoConfigureEnabled = false,
@@ -73,7 +73,7 @@ namespace Wristband.AspNet.Auth.Tests
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 TenantCustomDomain = "config-custom.com",  // This should take priority
-                TenantDomainName = "config-tenant"
+                TenantName = "config-tenant"
             };
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
@@ -81,15 +81,15 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://config-custom.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
         }
 
-        // Test Priority 2: LogoutConfig.TenantDomainName
+        // Test Priority 2: LogoutConfig.TenantName
         [Fact]
-        public async Task Logout_Should_UseTenantDomainFromConfig_WhenNoCustomDomain()
+        public async Task Logout_Should_UseTenantNameFromConfig_WhenNoCustomDomain()
         {
             WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
             HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
             LogoutConfig logoutConfig = new LogoutConfig
             {
-                TenantDomainName = "config-tenant"
+                TenantName = "config-tenant"
             };
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
@@ -98,7 +98,7 @@ namespace Wristband.AspNet.Auth.Tests
         }
 
         [Fact]
-        public async Task Logout_Should_UseTenantDomainFromConfig_WithCustomDomainSeparator()
+        public async Task Logout_Should_UseTenantNameFromConfig_WithCustomDomainSeparator()
         {
             var config = new WristbandAuthConfig
             {
@@ -115,7 +115,7 @@ namespace Wristband.AspNet.Auth.Tests
             HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
             LogoutConfig logoutConfig = new LogoutConfig
             {
-                TenantDomainName = "config-tenant"
+                TenantName = "config-tenant"
             };
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
@@ -145,8 +145,8 @@ namespace Wristband.AspNet.Auth.Tests
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
                 LoginStateSecret = new string('a', 32),
-                LoginUrl = "https://{tenant_domain}.example.com/login",
-                RedirectUri = "https://{tenant_domain}.example.com/callback",
+                LoginUrl = "https://{tenant_name}.example.com/login",
+                RedirectUri = "https://{tenant_name}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
                 ParseTenantFromRootDomain = "example.com",
                 AutoConfigureEnabled = false,
@@ -165,7 +165,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
             var httpContext = TestUtils.setupHttpContext("some-host.com");
-            httpContext.Request.QueryString = new QueryString("?tenant_domain=query-tenant");
+            httpContext.Request.QueryString = new QueryString("?tenant_name=query-tenant");
 
             var logoutUrl = await service.Logout(httpContext, new LogoutConfig());
 
@@ -227,7 +227,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
             var httpContext = TestUtils.setupHttpContext("some-host.com");
-            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            httpContext.Request.QueryString = new QueryString("?tenant_name=test-tenant");
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 RedirectUrl = "https://post-logout.com"
@@ -247,7 +247,7 @@ namespace Wristband.AspNet.Auth.Tests
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 RefreshToken = "test-refresh-token",
-                TenantDomainName = "config-tenant"
+                TenantName = "config-tenant"
             };
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
@@ -281,7 +281,7 @@ namespace Wristband.AspNet.Auth.Tests
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 TenantCustomDomain = "",
-                TenantDomainName = "",
+                TenantName = "",
                 RefreshToken = "", // Empty string (should not be revoked)
                 State = "",
             };
@@ -300,7 +300,7 @@ namespace Wristband.AspNet.Auth.Tests
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 TenantCustomDomain = "   ",
-                TenantDomainName = "   ",
+                TenantName = "   ",
                 RefreshToken = "   ", // Whitespace only - now treated as invalid (not revoked)
                 State = "   ",
             };
@@ -334,7 +334,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
             var httpContext = TestUtils.setupHttpContext("some-host.com");
-            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            httpContext.Request.QueryString = new QueryString("?tenant_name=test-tenant");
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 State = "custom-state-value"
@@ -350,7 +350,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
             var httpContext = TestUtils.setupHttpContext("some-host.com");
-            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            httpContext.Request.QueryString = new QueryString("?tenant_name=test-tenant");
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 State = "state with spaces & special chars"
@@ -366,7 +366,7 @@ namespace Wristband.AspNet.Auth.Tests
         {
             WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
             var httpContext = TestUtils.setupHttpContext("some-host.com");
-            httpContext.Request.QueryString = new QueryString("?tenant_domain=test-tenant");
+            httpContext.Request.QueryString = new QueryString("?tenant_name=test-tenant");
             LogoutConfig logoutConfig = new LogoutConfig
             {
                 RedirectUrl = "https://post-logout.com",
@@ -377,6 +377,59 @@ namespace Wristband.AspNet.Auth.Tests
 
             Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com&state=custom-state", logoutUrl);
         }
+
+        ////////////////////////////////////////////////////////
+        /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
+        ////////////////////////////////////////////////////////
+
+        [Fact]
+        public async Task Logout_Should_UseTenantDomainTokenInUrl_BackwardsCompat()
+        {
+            var config = new WristbandAuthConfig
+            {
+                ClientId = "valid-client-id",
+                ClientSecret = "valid-client-secret",
+                LoginStateSecret = new string('a', 32),
+                LoginUrl = "https://{tenant_domain}.example.com/login",
+                RedirectUri = "https://{tenant_domain}.example.com/callback",
+                WristbandApplicationVanityDomain = "example.com",
+                ParseTenantFromRootDomain = "example.com",
+                AutoConfigureEnabled = false,
+            };
+            WristbandAuthService service = setupWristbandAuthService(config);
+            HttpContext httpContext = TestUtils.setupHttpContext("tenant-subdomain.example.com");
+
+            var logoutUrl = await service.Logout(httpContext, new LogoutConfig());
+
+            Assert.Equal("https://tenant-subdomain-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+        }
+
+        [Fact]
+        public async Task Logout_Should_HandleTenantDomainTokenWithCustomDomainSeparator_BackwardsCompat()
+        {
+            var config = new WristbandAuthConfig
+            {
+                ClientId = "valid-client-id",
+                ClientSecret = "valid-client-secret",
+                LoginStateSecret = new string('a', 32),
+                LoginUrl = "https://{tenant_domain}.example.com/login",
+                RedirectUri = "https://{tenant_domain}.example.com/callback",
+                WristbandApplicationVanityDomain = "example.com",
+                ParseTenantFromRootDomain = "example.com",
+                IsApplicationCustomDomainActive = true,
+                AutoConfigureEnabled = false,
+            };
+            WristbandAuthService service = setupWristbandAuthService(config);
+            HttpContext httpContext = TestUtils.setupHttpContext("tenant-subdomain.example.com");
+
+            var logoutUrl = await service.Logout(httpContext, new LogoutConfig());
+
+            Assert.Equal("https://tenant-subdomain.example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+        }
+
+        ////////////////////////////////////////////////////////
+        /// HELPERS
+        ////////////////////////////////////////////////////////
 
         private WristbandAuthService setupWristbandAuthService(WristbandAuthConfig authConfig)
         {
