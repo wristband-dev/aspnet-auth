@@ -95,6 +95,7 @@ Learn more about Wristband's authentication patterns:
     - [GetSessionResponse()](#getsessionresponse)
     - [GetTokenResponse()](#gettokenresponse)
   - [CSRF Protection](#csrf-protection)
+  - [Session Encryption Configuration](#session-encryption-configuration)
 - [Authorization Policies](#authorization-policies)
   - [Session-Based Authentication](#session-based-authentication)
   - [JWT Bearer Token Authentication](#jwt-bearer-token-authentication)
@@ -102,7 +103,8 @@ Learn more about Wristband's authentication patterns:
 - [Advanced Configuration](#advanced-configuration)
   - [Configuration Sources](#configuration-sources)
   - [Named Services](#named-services-multiple-oauth2-clients)
-  - [Combining Policies](#combining-policies)
+  - [Combining Authorization Policies](#combining-authorization-policies)
+  - [Session Encryption with Persistent Key Storage](#session-encryption-with-persistent-key-storage)
 - [Related Wristband SDKs](#related-wristband-sdks)
 - [Wristband Multi-Tenant ASP.NET Demo App](#wristband-multi-tenant-aspnet-demo-app)
 - [Questions](#questions)
@@ -153,7 +155,7 @@ You should see the dependency added to your `.csproj` file:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Wristband.AspNet.Auth" Version="4.0.0" />
+  <PackageReference Include="Wristband.AspNet.Auth" Version="4.1.0" />
 </ItemGroup>
 ```
 
@@ -218,6 +220,11 @@ builder.Services.AddWristbandAuth(options =>
     options.WristbandApplicationVanityDomain = "<your-wristband-application-vanity-domain>";
 });
 
+// Configure zero-infrastructure session encryption.
+// Derives encryption keys from a shared secret - works across all deployment types
+// (single-server, multi-server, Kubernetes, serverless) without Redis or databases.
+builder.Services.AddInMemoryKeyDataProtection("your-secret-key-min-32-characters-long");
+
 // Add cookie-based authentication; stores session data in encrypted browser cookie
 // NOTE: Default to Cookie auth for access to session data on all endpoints.
 // Protected endpoints can override the default with authorization policies, if needed.
@@ -252,6 +259,7 @@ app.Run();
 
 | Component | Purpose |
 | --------- | ------- |
+| **`AddInMemoryKeyDataProtection()`** | Zero-infrastructure session encryption that works across all deployment types (single-server, Kubernetes, serverless, etc.) by deriving encryption keys from a shared secret. No Redis or databases required. See [Session Encryption Configuration](#session-encryption-configuration) for setup. |
 | **`AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)`** | Sets cookie authentication as the default scheme. This means .NET will automatically attempt to read and populate `HttpContext.User` from the session cookie on every request - including unprotected endpoints. Without this, session data would only be available on endpoints that explicitly require authentication. |
 | **`AddCookie()`** | Configures how session cookies work (security, expiration, etc.). |
 | **`UseWristbandSessionConfig()`** | Applies Wristband's recommended security defaults for session cookies. |
@@ -1838,6 +1846,72 @@ app.MapPost("/api/data", (HttpContext httpContext) =>
 
 <br>
 
+### Session Encryption Configuration
+
+Session encryption is configured using `AddInMemoryKeyDataProtection()`, which overrides ASP.NET Core's default Data Protection behavior to derive encryption keys from a shared secret. This enables sessions to work across all deployment types (single-server, multi-server, Kubernetes, serverless, etc.) without requiring Redis, databases, or persistent storage.
+
+This SDK configuration uses industry-standard cryptographic algorithms: HKDF-SHA256 for key derivation (RFC 5869), AES-256-GCM for authenticated encryption providing confidentiality, integrity, and authenticity, purpose isolation so different features (cookies, CSRF, anti-forgery) derive independent keys, timestamp validation to detect future-dated cookies (prevents clock skew attacks), and a version byte to enable future format compatibility.
+
+> **💡 Alternative: Persistent Key Storage**
+>
+> If you need to use ASP.NET's default Data Protection with persistent storage backends (Redis, Azure Blob Storage, file shares), see [Session Encryption with Persistent Key Storage](#session-encryption-with-persistent-key-storage) in the Advanced Configuration section.
+
+#### Basic Configuration
+
+The session encryption secret is typically loaded from environment variables or secure configuration:
+
+```csharp
+using Wristband.AspNet.Auth;
+
+builder.Services.AddWristbandAuth(options => { /* ... */ });
+
+// Configure session encryption with a shared secret
+builder.Services.AddInMemoryKeyDataProtection(
+    builder.Configuration["SESSION_ENCRYPTION_KEY"]!
+);
+```
+
+#### Generating Secrets
+
+Generate a secure 32+ character secret and store it in your environment configuration (Kubernetes Secrets, Azure App Settings, AWS Secrets Manager, etc.):
+
+```bash
+# Example: Using openssl (Linux/macOS)
+openssl rand -base64 32
+```
+
+#### Secret Rotation
+
+Zero-downtime secret rotation is supported by providing up to 3 secrets. The first secret encrypts new sessions, while all secrets can decrypt existing sessions:
+
+```csharp
+// Parse comma-separated secrets from configuration
+var secrets = builder.Configuration["SESSION_ENCRYPTION_KEY"]!.Split(',');
+builder.Services.AddInMemoryKeyDataProtection(secrets);
+```
+
+**Rotation workflow:**
+
+1. **Add new secret alongside old:**
+```bash
+   # New secret first, old secret second
+   SESSION_ENCRYPTION_KEY=new-secret-here,old-secret-here
+```
+
+2. **Deploy to all instances** - Both secrets work simultaneously
+
+3. **Wait for old sessions to expire** - Default session expiration is 1 hour
+
+4. **Remove old secret:**
+```bash
+   # Keep only new secret
+   SESSION_ENCRYPTION_KEY=new-secret-here
+```
+
+Sessions encrypted with the old secret are automatically re-encrypted with the new secret on the user's next request.
+
+<br>
+
 ---
 
 <br>
@@ -2492,7 +2566,7 @@ app.MapGet("/auth/callback", async (HttpContext httpContext, WristbandAuthServic
 
 <br>
 
-### Combining Policies
+### Combining Authorization Policies
 
 When using `AddWristbandDefaultPolicies()`, the `RequireWristbandSession()` and `RequireWristbandJwt()` convenience methods only enforce authentication. If your endpoint also requires specific roles, permissions, or other custom policies, use `.RequireAuthorization()` directly and pass multiple policy names:
 
@@ -2509,6 +2583,45 @@ app.MapGet("/api/users/edit", () => "Edit users")
 app.MapGet("/api/billing", () => "Billing")
     .RequireAuthorization("WristbandSession", "BillingAccess", "ActiveSubscription");
 ```
+
+<br>
+
+### Session Encryption with Persistent Key Storage
+
+By default, ASP.NET Core generates and manages encryption keys locally, which works for single-server deployments. For multi-server or containerized deployments (Kubernetes, Docker Swarm, load balancers, etc.), you must configure shared encryption keys across all instances. Otherwise, sessions created on one server cannot be decrypted by another, causing users to be randomly logged out as requests hit different servers.
+
+This SDK's `AddInMemoryKeyDataProtection()` provides zero-infrastructure session encryption (see [Session Encryption Configuration](#session-encryption-configuration)). Alternatively, you can use ASP.NET's Data Protection system with persistent storage backends if you already have infrastructure like Redis or need Data Protection features beyond session cookies (e.g., protecting database fields, files, or custom data).
+
+**Benefits of persistent storage:**
+- Keys survive server restarts and are automatically shared across instances
+- Microsoft's built-in automatic key rotation and lifecycle management
+- Additional Data Protection features beyond session cookies (database fields, files, custom data encryption)
+- Centralized audit trail and key management through your storage backend
+
+**Choose persistent storage if:**
+- You already have Redis or other persistent storage infrastructure
+- You need Data Protection features beyond session cookies (e.g., protecting database fields, files)
+- You prefer Microsoft's automatic key management over manual secret rotation
+
+#### Configuration
+
+Use ASP.NET's Data Protection system with a shared key storage backend:
+
+```csharp
+// Redis
+builder.Services.AddDataProtection()
+    .PersistKeysToStackExchangeRedis(redis, "DataProtection-Keys");
+
+// Azure Blob Storage
+builder.Services.AddDataProtection()
+    .PersistKeysToAzureBlobStorage(blobClient);
+
+// Network file share
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(@"\\server\share\keys"));
+```
+
+See Microsoft's [Configure ASP.NET Core Data Protection](https://learn.microsoft.com/en-us/aspnet/core/security/data-protection/configuration/overview) for all configuration options.
 
 <br>
 

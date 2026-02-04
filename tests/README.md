@@ -12,14 +12,14 @@ dotnet test --framework net9.0
 
 ```dotnetcli
 // Replace with desired file name you want to test
-dotnet test --framework net9.0 --filter FullyQualifiedName~Wristband.AspNet.Auth.Tests.LogoutConfigTests
+dotnet test --framework net9.0 --filter LogoutConfigTests
 ```
 
 ### Run a Single Test from a Single Test File
 
 ```dotnetcli
 // Replace with desired file name and method name you want to test
-dotnet test --framework net9.0 --filter FullyQualifiedName~Wristband.AspNet.Auth.Tests.LogoutConfigTests.Constructor_WithValidValues_SetsProperties
+dotnet test --framework net9.0 --filter Constructor_WithValidValues_SetsProperties
 ```
 
 ### Run Tests and Output Test Results
