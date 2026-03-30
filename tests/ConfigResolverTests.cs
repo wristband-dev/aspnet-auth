@@ -930,7 +930,72 @@ public class ConfigResolverTests
             () => resolver.GetRedirectUri());
 
         Assert.Equal("sdk_config_error", exception.Error);
-        Assert.Contains("SDK configuration response missing required field: RedirectUri", exception.ErrorDescription);
+        Assert.Contains("The [RedirectUri] could not be resolved. Provide it explicitly in your SDK config or ensure your Wristband OAuth2 Client has a single redirect URI configured.", exception.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task GetRedirectUri_WithNullSdkRedirectUriAndManualOverride_ReturnsManualValue()
+    {
+        var sdkConfig = new SdkConfiguration
+        {
+            LoginUrl = "https://login.example.com",
+            RedirectUri = null // SDK returns null (multiple redirect URIs registered)
+        };
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
+
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            WristbandApplicationVanityDomain = "test.wristband.dev",
+            RedirectUri = "https://manual-callback.example.com",
+            AutoConfigureEnabled = true
+        };
+        var resolver = new ConfigResolver(config, _mockApiClient.Object);
+
+        var result = await resolver.GetRedirectUri();
+
+        Assert.Equal("https://manual-callback.example.com", result);
+        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetRedirectUri_WithEmptySdkRedirectUri_ThrowsWristbandError()
+    {
+        var sdkConfig = new SdkConfiguration
+        {
+            LoginUrl = "https://login.example.com",
+            RedirectUri = "" // Empty string also triggers error
+        };
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
+
+        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
+
+        var exception = await Assert.ThrowsAsync<WristbandError>(
+            () => resolver.GetRedirectUri());
+
+        Assert.Equal("sdk_config_error", exception.Error);
+        Assert.Contains("The [RedirectUri] could not be resolved", exception.ErrorDescription);
+        Assert.Contains("Provide it explicitly in your SDK config or ensure your Wristband OAuth2 Client has a single redirect URI configured.", exception.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task GetRedirectUri_WithNullSdkRedirectUri_ThrowsWristbandError()
+    {
+        var sdkConfig = new SdkConfiguration
+        {
+            LoginUrl = "https://login.example.com",
+            RedirectUri = null // SDK returns null (multiple redirect URIs registered)
+        };
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
+
+        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
+
+        var exception = await Assert.ThrowsAsync<WristbandError>(
+            () => resolver.GetRedirectUri());
+
+        Assert.Equal("sdk_config_error", exception.Error);
+        Assert.Contains("The [RedirectUri] could not be resolved. Provide it explicitly in your SDK config or ensure your Wristband OAuth2 Client has a single redirect URI configured.", exception.ErrorDescription);
     }
 
     // ////////////////////////////////////

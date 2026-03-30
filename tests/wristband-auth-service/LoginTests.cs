@@ -226,6 +226,58 @@ public class LoginTests
     }
 
     [Fact]
+    public async Task Login_WithIdpHint_IncludesInAuthorizationUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var idpHint = "google";
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            $"tenant_name=tenant1&idp_hint={Uri.EscapeDataString(idpHint)}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Contains($"idp_hint={Uri.EscapeDataString(idpHint)}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithMultipleLoginHintParams_ThrowsArgumentException()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_name=tenant1&login_hint=user1@example.com&login_hint=user2@example.com");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => service.Login(httpContext, null));
+
+        Assert.Contains("More than one [login_hint] query parameter was encountered", ex.Message);
+    }
+
+    [Fact]
+    public async Task Login_WithMultipleIdpHintParams_ThrowsArgumentException()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_name=tenant1&idp_hint=google&idp_hint=github");
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => service.Login(httpContext, null));
+
+        Assert.Contains("More than one [idp_hint] query parameter was encountered", ex.Message);
+    }
+
+    [Fact]
+    public async Task Login_WithoutLoginHintAndIdpHint_ExcludesFromAuthorizationUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=tenant1");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.DoesNotContain("login_hint", result);
+        Assert.DoesNotContain("idp_hint", result);
+    }
+
+    [Fact]
     public async Task Login_WithAdditionalScopes_IncludesAllScopes()
     {
         var config = new WristbandAuthConfig

@@ -243,7 +243,7 @@ internal class ConfigResolver
         if (GetAutoConfigureEnabled())
         {
             var sdkConfig = await LoadSdkConfig();
-            return sdkConfig.RedirectUri;
+            return sdkConfig.RedirectUri ?? string.Empty;
         }
 
         // 3. This should not happen if validation is done properly
@@ -425,22 +425,24 @@ internal class ConfigResolver
 
     private void ValidateAllDynamicConfigs(SdkConfiguration sdkConfiguration)
     {
-        // Validate that required fields are present in the SDK config response
-        if (string.IsNullOrEmpty(sdkConfiguration.LoginUrl))
-        {
-            throw new WristbandError("sdk_config_error", "SDK configuration response missing required field: LoginUrl");
-        }
-
-        if (string.IsNullOrEmpty(sdkConfiguration.RedirectUri))
-        {
-            throw new WristbandError("sdk_config_error", "SDK configuration response missing required field: RedirectUri");
-        }
-
         // Use manual config values if provided, otherwise use SDK config values
         var loginUrl = _authConfig.LoginUrl ?? sdkConfiguration.LoginUrl;
         var redirectUri = _authConfig.RedirectUri ?? sdkConfiguration.RedirectUri;
         var parseTenantFromRootDomain = _authConfig.ParseTenantFromRootDomain ??
             sdkConfiguration.LoginUrlTenantDomainSuffix;
+
+        // Validate that required fields are present in the SDK config response
+        if (string.IsNullOrEmpty(loginUrl))
+        {
+            throw new WristbandError("sdk_config_error", "SDK configuration response missing required field: LoginUrl");
+        }
+
+        if (string.IsNullOrEmpty(redirectUri))
+        {
+            throw new WristbandError(
+                "sdk_config_error",
+                "The [RedirectUri] could not be resolved. Provide it explicitly in your SDK config or ensure your Wristband OAuth2 Client has a single redirect URI configured.");
+        }
 
         var hasRootDomain = !string.IsNullOrEmpty(parseTenantFromRootDomain);
         var loginUrlHasToken = ContainsTenantPlaceholder(loginUrl);

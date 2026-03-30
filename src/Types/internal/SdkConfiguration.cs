@@ -49,7 +49,9 @@ internal class SdkConfiguration
     /// Gets or sets the URI that Wristband will redirect to after authenticating a user.
     /// This should point to your application's callback endpoint.
     /// If using tenant subdomains, this value must contain the `{tenant_name}` placeholder.
+    /// When null, the redirect URI must be provided explicitly in the SDK configuration,
+    /// which is required when the OAuth2 client has multiple redirect URIs registered.
     /// </summary>
     [JsonPropertyName("redirectUri")]
-    public string RedirectUri { get; set; } = string.Empty;
+    public string? RedirectUri { get; set; }
 }
