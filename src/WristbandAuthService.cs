@@ -129,8 +129,33 @@ public class WristbandAuthService : IWristbandAuthService
             { "code_challenge", CreateCodeChallenge(loginState.CodeVerifier) },
             { "code_challenge_method", "S256" },
             { "nonce", _loginStateHandler.GenerateRandomString(32) },
-            { "login_hint", context.Request.Query["login_hint"].FirstOrDefault() ?? string.Empty },
         };
+
+        // Optionally add login_hint query parameter if it was included in the login request.
+        var loginHintValues = context.Request.Query["login_hint"];
+        if (loginHintValues.Count > 1)
+        {
+            throw new ArgumentException("More than one [login_hint] query parameter was encountered");
+        }
+
+        var loginHint = loginHintValues.FirstOrDefault();
+        if (!string.IsNullOrEmpty(loginHint))
+        {
+            queryParams["login_hint"] = loginHint;
+        }
+
+        // Optionally add idp_hint query parameter if it was included in the login request.
+        var idpHintValues = context.Request.Query["idp_hint"];
+        if (idpHintValues.Count > 1)
+        {
+            throw new ArgumentException("More than one [idp_hint] query parameter was encountered");
+        }
+
+        var idpHint = idpHintValues.FirstOrDefault();
+        if (!string.IsNullOrEmpty(idpHint))
+        {
+            queryParams["idp_hint"] = idpHint;
+        }
 
         var separator = isApplicationCustomDomainActive ? '.' : '-';
         var queryString = string.Join("&", queryParams

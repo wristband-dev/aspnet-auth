@@ -13,7 +13,7 @@ public class SdkConfigurationTests
         Assert.False(config.IsApplicationCustomDomainActive);
         Assert.Equal(string.Empty, config.LoginUrl);
         Assert.Null(config.LoginUrlTenantDomainSuffix);
-        Assert.Equal(string.Empty, config.RedirectUri);
+        Assert.Null(config.RedirectUri);
     }
 
     [Fact]
@@ -118,11 +118,11 @@ public class SdkConfigurationTests
     }
 
     [Fact]
-    public void RedirectUri_ShouldDefaultToEmptyString()
+    public void RedirectUri_ShouldDefaultToNull()
     {
         var config = new SdkConfiguration();
 
-        Assert.Equal(string.Empty, config.RedirectUri);
+        Assert.Null(config.RedirectUri);
     }
 
     [Fact]
@@ -186,7 +186,7 @@ public class SdkConfigurationTests
             ""isApplicationCustomDomainActive"": false,
             ""loginUrl"": """",
             ""loginUrlTenantDomainSuffix"": null,
-            ""redirectUri"": """"
+            ""redirectUri"": null
         }";
 
         var config = JsonSerializer.Deserialize<SdkConfiguration>(json);
@@ -196,7 +196,7 @@ public class SdkConfigurationTests
         Assert.False(config.IsApplicationCustomDomainActive);
         Assert.Equal(string.Empty, config.LoginUrl);
         Assert.Null(config.LoginUrlTenantDomainSuffix);
-        Assert.Equal(string.Empty, config.RedirectUri);
+        Assert.Null(config.RedirectUri);
     }
 
     ////////////////////////////////////////////////////////
