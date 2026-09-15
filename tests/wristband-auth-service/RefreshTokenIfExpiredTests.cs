@@ -162,10 +162,12 @@ public class RefreshTokenIfExpiredTests
         }
     }
 
+    // Retrying transient failures is handled inside the API client, which is mocked out here, so the
+    // service makes exactly one call. Retrying at both layers would compound into far more attempts
+    // than intended.
     [Fact]
-    public async Task RefreshTokenIfExpired_ServerError_RetryAndSucceed()
+    public async Task RefreshTokenIfExpired_ServerError_DoesNotRetryAtServiceLayer()
     {
-        // Setup to fail with error once, then succeed
         _mockApiClient
             .SetupSequence(m => m.RefreshToken("validRefreshToken"))
             .ThrowsAsync(new WristbandError("unexpected_error", "Unexpected Error"))
@@ -180,14 +182,12 @@ public class RefreshTokenIfExpiredTests
         var dateTime = DateTime.UtcNow.AddMinutes(-5);
         var msSinceEpoch = new DateTimeOffset(dateTime).ToUnixTimeMilliseconds();
 
-        var result = await _wristbandAuthService.RefreshTokenIfExpired("validRefreshToken", msSinceEpoch);
+        var exception = await Assert.ThrowsAsync<WristbandError>(
+            () => _wristbandAuthService.RefreshTokenIfExpired("validRefreshToken", msSinceEpoch)
+        );
 
-        Assert.NotNull(result);
-        Assert.Equal("newAccessToken", result.AccessToken);
-        Assert.True(result.ExpiresAt > 0);
-        Assert.Equal(3540, result.ExpiresIn); // 3600 - 60 (token expiration buffer)
-        Assert.Equal("newIdToken", result.IdToken);
-        Assert.Equal("newRefreshToken", result.RefreshToken);
+        Assert.Equal("unexpected_error", exception.Error);
+        _mockApiClient.Verify(m => m.RefreshToken("validRefreshToken"), Times.Once);
     }
 
     [Fact]

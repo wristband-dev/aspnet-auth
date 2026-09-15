@@ -9,8 +9,6 @@ internal class ConfigResolver
     private const string TenantDomainPlaceholder = "{tenant_domain}";
     private const string TenantNamePlaceholder = "{tenant_name}";
     private const int DefaultTokenExpirationBuffer = 60; // 60 seconds
-    private const int MaxFetchAttempts = 3;
-    private const int AttemptDelayMs = 100; // 100 milliseconds
     private static readonly List<string> DefaultScopes = new List<string> { "openid", "offline_access", "email" };
 
     private readonly WristbandAuthConfig _authConfig;
@@ -287,34 +285,27 @@ internal class ConfigResolver
         }
     }
 
+    /// <summary>
+    /// Fetches the SDK configuration from the Wristband platform.
+    /// </summary>
+    /// <remarks>
+    /// Retrying transient failures (5xx responses and network errors) is handled one layer down by
+    /// <see cref="WristbandApiClient.GetSdkConfiguration"/> -- see <see cref="WristbandApiRetry"/>. By
+    /// the time an error surfaces here, any applicable retries have already been exhausted.
+    /// </remarks>
+    /// <returns>A task that represents the asynchronous operation and contains the SDK configuration.</returns>
     private async Task<SdkConfiguration> FetchSdkConfiguration()
     {
-        Exception? lastError = null;
-
-        for (int attempt = 1; attempt <= MaxFetchAttempts; attempt++)
+        try
         {
-            try
-            {
-                return await _wristbandApiClient.GetSdkConfiguration();
-            }
-            catch (Exception error)
-            {
-                lastError = error;
-
-                // Final attempt failed, throw the error
-                if (attempt == MaxFetchAttempts)
-                {
-                    break;
-                }
-
-                // Wait before retrying
-                await Task.Delay(AttemptDelayMs);
-            }
+            return await _wristbandApiClient.GetSdkConfiguration();
         }
-
-        throw new WristbandError(
-            "sdk_config_error",
-            $"Failed to fetch SDK configuration after {MaxFetchAttempts} attempts: {lastError?.Message ?? "Unknown error"}");
+        catch (Exception error)
+        {
+            throw new WristbandError(
+                "sdk_config_error",
+                $"Failed to fetch SDK configuration: {error.Message}");
+        }
     }
 
     private void ValidateRequiredAuthConfigs()

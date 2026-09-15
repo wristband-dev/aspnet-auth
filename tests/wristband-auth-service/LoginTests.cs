@@ -29,6 +29,13 @@ public class LoginTests
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
         _mockApiClient = new Mock<IWristbandApiClient>();
+
+        // Tenant custom domains supplied by query parameter are validated against Wristband before
+        // being used. Default to valid so that tests which are not about validation are unaffected.
+        _mockApiClient
+            .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+            .ReturnsAsync(true);
+
         SetupDefaultLoginStateMock();
     }
 
@@ -512,6 +519,127 @@ public class LoginTests
     ////////////////////////////////////////////////////////
     /// HELPERS
     ////////////////////////////////////////////////////////
+
+    // ////////////////////////////////////
+    //  TENANT CUSTOM DOMAIN VALIDATION TESTS
+    // ////////////////////////////////////
+
+    // The tenant_custom_domain query parameter is attacker-controllable, so it is validated against
+    // Wristband before the SDK redirects to it.
+    [Fact]
+    public async Task Login_WithValidTenantCustomDomain_ValidatesAgainstWristband()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var customDomain = "tenant.custom.com";
+
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_custom_domain={customDomain}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith($"https://{customDomain}/api/v1/oauth2/authorize?", result);
+        _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(customDomain), Times.Once);
+    }
+
+    // An invalid domain is skipped rather than failing the login, so resolution falls through to the
+    // next domain in the precedence order.
+    [Fact]
+    public async Task Login_WithInvalidTenantCustomDomain_FallsThroughToTenantSubdomain()
+    {
+        _mockApiClient
+            .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            ParseTenantFromRootDomain = "example.com",
+            AutoConfigureEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+
+        var httpContext = TestUtils.setupHttpContext(
+            "tenant1.example.com",
+            "tenant_custom_domain=attacker.example.net");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith(
+            $"https://tenant1-{config.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?",
+            result);
+        Assert.DoesNotContain("attacker.example.net", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantCustomDomain_FallsThroughToDefaultTenantCustomDomain()
+    {
+        _mockApiClient
+            .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_custom_domain=attacker.example.net");
+
+        // Domains set directly in configuration by the developer are trusted and are not validated.
+        var loginConfig = new LoginConfig { DefaultTenantCustomDomain = "default.custom.com" };
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        Assert.StartsWith("https://default.custom.com/api/v1/oauth2/authorize?", result);
+        _mockApiClient.Verify(m => m.ValidateTenantCustomDomain("default.custom.com"), Times.Never);
+    }
+
+    // With nothing else to fall through to, an invalid domain sends the user to app-level login.
+    [Fact]
+    public async Task Login_WithInvalidTenantCustomDomainAndNoFallback_ReturnsAppLevelLoginUrl()
+    {
+        _mockApiClient
+            .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+            .ReturnsAsync(false);
+
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext(
+            "app.example.com",
+            "tenant_custom_domain=attacker.example.net");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal(
+            $"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}",
+            result);
+    }
+
+    // A validation call that fails outright must surface rather than being treated as "invalid" and
+    // silently skipped, which would hide an outage behind a confusing redirect.
+    [Fact]
+    public async Task Login_WhenValidationCallFails_SurfacesTheError()
+    {
+        _mockApiClient
+            .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+            .ThrowsAsync(new HttpRequestException("Service Unavailable"));
+
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_custom_domain=tenant.custom.com");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => service.Login(httpContext, null));
+    }
+
+    [Fact]
+    public async Task Login_WithNoTenantCustomDomainParam_SkipsValidationCall()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=tenant1");
+
+        await service.Login(httpContext, null);
+
+        _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
+    }
 
     private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {
