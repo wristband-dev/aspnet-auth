@@ -999,11 +999,14 @@ public class ConfigResolverTests
     }
 
     // ////////////////////////////////////
-    //  SDK CONFIGURATION RETRY TESTS
+    //  SDK CONFIGURATION FETCH TESTS
     // ////////////////////////////////////
 
+    // Retrying transient failures is handled one layer down by the API client, so the resolver makes
+    // a single call per fetch. Retrying here as well would compound the two policies into far more
+    // attempts than intended.
     [Fact]
-    public async Task SdkConfigurationFetch_WithRetrySuccess_ReturnsConfiguration()
+    public async Task SdkConfigurationFetch_DelegatesRetryToApiClient_MakesSingleCall()
     {
         var sdkConfig = new SdkConfiguration
         {
@@ -1011,21 +1014,18 @@ public class ConfigResolverTests
             RedirectUri = "https://callback.example.com"
         };
 
-        _mockApiClient.SetupSequence(x => x.GetSdkConfiguration())
-            .ThrowsAsync(new Exception("Network error 1"))
-            .ThrowsAsync(new Exception("Network error 2"))
-            .ReturnsAsync(sdkConfig);
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
 
         var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
 
         var result = await resolver.GetLoginUrl();
 
         Assert.Equal("https://login.example.com", result);
-        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Exactly(3));
+        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Once());
     }
 
     [Fact]
-    public async Task SdkConfigurationFetch_WithMaxRetriesExceeded_ThrowsWristbandError()
+    public async Task SdkConfigurationFetch_WhenApiClientFails_ThrowsWristbandError()
     {
         _mockApiClient.Setup(x => x.GetSdkConfiguration())
             .ThrowsAsync(new Exception("Persistent network error"));
@@ -1036,9 +1036,9 @@ public class ConfigResolverTests
             () => resolver.GetLoginUrl());
 
         Assert.Equal("sdk_config_error", exception.Error);
-        Assert.Contains("Failed to fetch SDK configuration after 3 attempts", exception.ErrorDescription);
+        Assert.Contains("Failed to fetch SDK configuration", exception.ErrorDescription);
         Assert.Contains("Persistent network error", exception.ErrorDescription);
-        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Exactly(3));
+        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Once());
     }
 
     // ////////////////////////////////////
@@ -1315,22 +1315,20 @@ public class ConfigResolverTests
 
         _mockApiClient.SetupSequence(x => x.GetSdkConfiguration())
             .ThrowsAsync(new Exception("First error"))
-            .ThrowsAsync(new Exception("Second error"))
-            .ThrowsAsync(new Exception("Third error"))
-            .ReturnsAsync(sdkConfig); // Success on retry
+            .ReturnsAsync(sdkConfig); // Success on the next fetch
 
         var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
 
-        // First attempt should fail after 3 retries
+        // A failed fetch is not cached, so the error surfaces.
         var firstException = await Assert.ThrowsAsync<WristbandError>(
             () => resolver.GetLoginUrl());
-        Assert.Contains("Failed to fetch SDK configuration after 3 attempts", firstException.ErrorDescription);
+        Assert.Contains("Failed to fetch SDK configuration", firstException.ErrorDescription);
 
         // Second attempt should succeed (new cache attempt)
         var result = await resolver.GetRedirectUri();
         Assert.Equal("https://sdk.example.com/callback", result);
 
-        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Exactly(4));
+        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Exactly(2));
     }
 
     [Fact]
@@ -1474,7 +1472,7 @@ public class ConfigResolverTests
             .Returns(() =>
             {
                 callCount++;
-                if (callCount <= 3)
+                if (callCount <= 1)
                 {
                     throw new Exception($"Error {callCount}");
                 }
@@ -1483,9 +1481,9 @@ public class ConfigResolverTests
 
         var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
 
-        // First attempt should fail after retries
+        // First attempt should fail
         await Assert.ThrowsAsync<WristbandError>(() => resolver.GetLoginUrl());
-        Assert.Equal(3, callCount);
+        Assert.Equal(1, callCount);
 
         // Concurrent requests after failure should succeed
         var loginUrlTask = Task.Run(async () => await resolver.GetLoginUrl());
@@ -1495,7 +1493,7 @@ public class ConfigResolverTests
 
         Assert.Equal("https://sdk.example.com/login", results[0]);
         Assert.Equal("https://sdk.example.com/callback", results[1]);
-        Assert.Equal(4, callCount); // One more successful call
+        Assert.Equal(2, callCount); // One more successful call
     }
 
     ////////////////////////////////////////////////////////

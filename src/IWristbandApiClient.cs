@@ -45,4 +45,12 @@ internal interface IWristbandApiClient
     /// <remarks><a href="https://docs.wristband.dev/reference/tokenv1">Wristband Token Endpoint</a></remarks>
     /// Calls the Wristband Revoke Token Endpoint. See here for more: https://docs.wristband.dev/reference/tokenv1
     Task RevokeRefreshToken(string refreshToken);
+
+    /// <summary>
+    /// Calls the Wristband Tenant Custom Domain Validation Endpoint to confirm that a tenant custom
+    /// domain is verified and belongs to your Wristband application.
+    /// </summary>
+    /// <param name="tenantCustomDomain">The tenant custom domain to validate.</param>
+    /// <returns>A <see cref="Task{Boolean}"/> representing the asynchronous operation. The result is true if the domain is valid; otherwise, false.</returns>
+    Task<bool> ValidateTenantCustomDomain(string tenantCustomDomain);
 }

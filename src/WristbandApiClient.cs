@@ -78,24 +78,27 @@ internal class WristbandApiClient : IWristbandApiClient
     /// <inheritdoc />
     public async Task<SdkConfiguration> GetSdkConfiguration()
     {
-        var request = new HttpRequestMessage(
-            HttpMethod.Get,
-            $"https://{_wristbandApplicationVanityDomain}/api/v1/clients/{_clientId}/sdk-configuration");
-
-        request.Headers.Add("Accept", "application/json");
-
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
-
-        var responseContent = await response.Content.ReadAsStringAsync();
-
-        var sdkConfig = JsonSerializer.Deserialize<SdkConfiguration>(responseContent);
-        if (sdkConfig == null)
+        return await WristbandApiRetry.WithRetry(async () =>
         {
-            throw new InvalidOperationException("Failed to deserialize SDK configuration response");
-        }
+            var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"https://{_wristbandApplicationVanityDomain}/api/v1/clients/{_clientId}/sdk-configuration");
 
-        return sdkConfig;
+            request.Headers.Add("Accept", "application/json");
+
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            var sdkConfig = JsonSerializer.Deserialize<SdkConfiguration>(responseContent);
+            if (sdkConfig == null)
+            {
+                throw new InvalidOperationException("Failed to deserialize SDK configuration response");
+            }
+
+            return sdkConfig;
+        });
     }
 
     /// <summary>
@@ -112,55 +115,52 @@ internal class WristbandApiClient : IWristbandApiClient
             { "code_verifier", codeVerifier },
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
+        return await WristbandApiRetry.WithRetry(async () =>
         {
-            Content = new FormUrlEncodedContent(formParams),
-        };
-
-        request.Headers.Authorization = _basicAuthHeader;
-
-        var response = await _httpClient.SendAsync(request);
-
-        if (response.StatusCode == HttpStatusCode.BadRequest)
-        {
-            var errorResponseContent = await response.Content.ReadAsStringAsync();
-
-            try
+            var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
             {
-                var tokenErrorResponse = JsonSerializer.Deserialize<WristbandTokenResponseError>(errorResponseContent);
-                if (tokenErrorResponse == null)
-                {
-                    throw new InvalidOperationException("Failed to deserialize the token error response.");
-                }
+                Content = new FormUrlEncodedContent(formParams),
+            };
 
-                if (string.Equals(tokenErrorResponse.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
+            request.Headers.Authorization = _basicAuthHeader;
+
+            var response = await _httpClient.SendAsync(request);
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                var errorResponseContent = await response.Content.ReadAsStringAsync();
+                var tokenErrorResponse = TryParseTokenErrorResponse(errorResponseContent);
+
+                if (tokenErrorResponse != null &&
+                    string.Equals(tokenErrorResponse.Error, "invalid_grant", StringComparison.OrdinalIgnoreCase))
                 {
                     throw new InvalidGrantError(tokenErrorResponse.ErrorDescription);
                 }
+
+                // Any other 400 falls through to EnsureSuccessStatusCode() below so that the HTTP
+                // failure itself surfaces. A 400 whose body is not the expected JSON (for example an
+                // HTML error page from a proxy or CDN) would otherwise be reported as a parse error,
+                // hiding the real status code.
+            }
+
+            response.EnsureSuccessStatusCode();
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            try
+            {
+                var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
+                if (tokenResponse == null)
+                {
+                    throw new InvalidOperationException("Failed to deserialize the token response.");
+                }
+
+                return tokenResponse;
             }
             catch (JsonException ex)
             {
-                throw new InvalidOperationException("Error while parsing the token error response JSON.", ex);
+                throw new InvalidOperationException("Error while parsing the token response JSON.", ex);
             }
-        }
-
-        response.EnsureSuccessStatusCode();
-        var responseContent = await response.Content.ReadAsStringAsync();
-
-        try
-        {
-            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
-            if (tokenResponse == null)
-            {
-                throw new InvalidOperationException("Failed to deserialize the token response.");
-            }
-
-            return tokenResponse;
-        }
-        catch (JsonException ex)
-        {
-            throw new InvalidOperationException("Error while parsing the token response JSON.", ex);
-        }
+        });
     }
 
     /// <summary>
@@ -169,19 +169,22 @@ internal class WristbandApiClient : IWristbandApiClient
     /// <inheritdoc />
     public async Task<UserInfo> GetUserinfo(string accessToken)
     {
-        var request = new HttpRequestMessage(HttpMethod.Get, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/userinfo");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        return await WristbandApiRetry.WithRetry(async () =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/userinfo");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-        var response = await _httpClient.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
 
-        var responseContent = await response.Content.ReadAsStringAsync();
+            var responseContent = await response.Content.ReadAsStringAsync();
 
-        // Parse raw OIDC claims
-        var rawUserInfo = new RawUserInfo(responseContent);
+            // Parse raw OIDC claims
+            var rawUserInfo = new RawUserInfo(responseContent);
 
-        // Map to friendly UserInfo
-        return UserInfoMapper.MapUserInfo(rawUserInfo);
+            // Map to friendly UserInfo
+            return UserInfoMapper.MapUserInfo(rawUserInfo);
+        });
     }
 
     /// <summary>
@@ -196,47 +199,50 @@ internal class WristbandApiClient : IWristbandApiClient
             { "refresh_token", refreshToken },
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
+        return await WristbandApiRetry.WithRetry(async () =>
         {
-            Content = new FormUrlEncodedContent(formParams),
-        };
-
-        request.Headers.Authorization = _basicAuthHeader;
-
-        try
-        {
-            var response = await _httpClient.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
+            var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
             {
-                if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
+                Content = new FormUrlEncodedContent(formParams),
+            };
+
+            request.Headers.Authorization = _basicAuthHeader;
+
+            try
+            {
+                var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
                 {
-                    throw new WristbandError("invalid_refresh_token", "Invalid Refresh Token");
+                    if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
+                    {
+                        throw new WristbandError("invalid_refresh_token", "Invalid Refresh Token");
+                    }
+
+                    if ((int)response.StatusCode >= 500)
+                    {
+                        throw new WristbandError("unexpected_error", "Server error occurred. Retry later.");
+                    }
                 }
 
-                if ((int)response.StatusCode >= 500)
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
+
+                if (tokenResponse == null)
                 {
-                    throw new WristbandError("unexpected_error", "Server error occurred. Retry later.");
+                    throw new InvalidOperationException("Failed to deserialize token response.");
                 }
+
+                return tokenResponse;
             }
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
-
-            if (tokenResponse == null)
+            catch (WristbandError)
             {
-                throw new InvalidOperationException("Failed to deserialize token response.");
+                throw;  // Propagate custom errors (4xx and non-retryable issues)
             }
-
-            return tokenResponse;
-        }
-        catch (WristbandError)
-        {
-            throw;  // Propagate custom errors (4xx and non-retryable issues)
-        }
-        catch (Exception)
-        {
-            throw new WristbandError("unexpected_error", "An unexpected error occurred during the token refresh operation.");
-        }
+            catch (Exception)
+            {
+                throw new WristbandError("unexpected_error", "An unexpected error occurred during the token refresh operation.");
+            }
+        });
     }
 
     /// <summary>
@@ -250,21 +256,91 @@ internal class WristbandApiClient : IWristbandApiClient
             { "token", refreshToken },
         };
 
-        var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/revoke")
-        {
-            Content = new FormUrlEncodedContent(formParams),
-        };
-
-        request.Headers.Authorization = _basicAuthHeader;
-
         try
         {
-            var response = await _httpClient.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+            await WristbandApiRetry.WithRetry(async () =>
+            {
+                var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/revoke")
+                {
+                    Content = new FormUrlEncodedContent(formParams),
+                };
+
+                request.Headers.Authorization = _basicAuthHeader;
+
+                var response = await _httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+            });
         }
         catch (Exception)
         {
             // Ignore revoke errors; logout should still succeed
+        }
+    }
+
+    /// <summary>
+    /// Implements <see cref="IWristbandApiClient.ValidateTenantCustomDomain"/>.
+    /// </summary>
+    /// <inheritdoc />
+    public async Task<bool> ValidateTenantCustomDomain(string tenantCustomDomain)
+    {
+        if (string.IsNullOrWhiteSpace(tenantCustomDomain))
+        {
+            throw new ArgumentException("The tenant custom domain must have a value.", nameof(tenantCustomDomain));
+        }
+
+        var payload = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            { "tenantCustomDomain", tenantCustomDomain },
+        });
+
+        return await WristbandApiRetry.WithRetry(async () =>
+        {
+            var request = new HttpRequestMessage(
+                HttpMethod.Post,
+                $"https://{_wristbandApplicationVanityDomain}/api/v1/custom-domains/validate")
+            {
+                Content = new StringContent(payload, Encoding.UTF8, "application/json"),
+            };
+
+            request.Headers.Add("Accept", "application/json");
+            request.Headers.Authorization = _basicAuthHeader;
+
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            try
+            {
+                var validationResponse = JsonSerializer.Deserialize<ValidateTenantCustomDomainResponse>(responseContent);
+                if (validationResponse == null)
+                {
+                    throw new InvalidOperationException("Failed to deserialize the tenant custom domain validation response.");
+                }
+
+                return validationResponse.Valid;
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidOperationException("Error while parsing the tenant custom domain validation response JSON.", ex);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Deserializes a token error response body, returning null when the body is not the expected JSON.
+    /// </summary>
+    /// <param name="errorResponseContent">The raw response body.</param>
+    /// <returns>The parsed error response, or null if the body could not be parsed.</returns>
+    private static WristbandTokenResponseError? TryParseTokenErrorResponse(string errorResponseContent)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<WristbandTokenResponseError>(errorResponseContent);
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

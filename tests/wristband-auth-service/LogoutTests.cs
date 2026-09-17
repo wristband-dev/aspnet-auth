@@ -20,6 +20,15 @@ namespace Wristband.AspNet.Auth.Tests
             AutoConfigureEnabled = false,
         };
 
+        public LogoutTests()
+        {
+            // Tenant custom domains supplied by query parameter are validated against Wristband before
+            // being used. Default to valid so that tests which are not about validation are unaffected.
+            _mockApiClient
+                .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+                .ReturnsAsync(true);
+        }
+
         [Fact]
         public async Task Logout_Should_ReturnAppLoginUrl_IfNoLogoutConfigProvided()
         {
@@ -430,6 +439,97 @@ namespace Wristband.AspNet.Auth.Tests
         ////////////////////////////////////////////////////////
         /// HELPERS
         ////////////////////////////////////////////////////////
+
+        // ////////////////////////////////////
+        //  TENANT CUSTOM DOMAIN VALIDATION TESTS
+        // ////////////////////////////////////
+
+        // The tenant_custom_domain query parameter is attacker-controllable, so it is validated
+        // against Wristband before the SDK redirects to it.
+        [Fact]
+        public async Task Logout_Should_ValidateTenantCustomDomainFromQuery()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            HttpContext httpContext = TestUtils.setupHttpContext(
+                "some-host.com",
+                "tenant_custom_domain=query-tenant.com");
+
+            var logoutUrl = await service.Logout(httpContext, null);
+
+            Assert.Equal("https://query-tenant.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+            _mockApiClient.Verify(m => m.ValidateTenantCustomDomain("query-tenant.com"), Times.Once);
+        }
+
+        // An invalid domain is skipped rather than failing the logout, so resolution falls through
+        // to the next domain in the precedence order.
+        [Fact]
+        public async Task Logout_Should_FallThroughToTenantName_WhenQueryCustomDomainIsInvalid()
+        {
+            _mockApiClient
+                .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+                .ReturnsAsync(false);
+
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            HttpContext httpContext = TestUtils.setupHttpContext(
+                "some-host.com",
+                "tenant_custom_domain=attacker.example.net&tenant_name=tenant1");
+
+            var logoutUrl = await service.Logout(httpContext, null);
+
+            Assert.Equal("https://tenant1-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+            Assert.DoesNotContain("attacker.example.net", logoutUrl);
+        }
+
+        [Fact]
+        public async Task Logout_Should_ReturnAppLoginUrl_WhenQueryCustomDomainIsInvalidAndNoFallback()
+        {
+            _mockApiClient
+                .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+                .ReturnsAsync(false);
+
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            HttpContext httpContext = TestUtils.setupHttpContext(
+                "some-host.com",
+                "tenant_custom_domain=attacker.example.net");
+
+            var logoutUrl = await service.Logout(httpContext, null);
+
+            Assert.Equal("https://example.com/login?client_id=valid-client-id", logoutUrl);
+        }
+
+        // A validation call that fails outright must surface rather than being treated as "invalid"
+        // and silently skipped, which would hide an outage behind a confusing redirect.
+        [Fact]
+        public async Task Logout_Should_SurfaceError_WhenValidationCallFails()
+        {
+            _mockApiClient
+                .Setup(m => m.ValidateTenantCustomDomain(It.IsAny<string>()))
+                .ThrowsAsync(new HttpRequestException("Service Unavailable"));
+
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            HttpContext httpContext = TestUtils.setupHttpContext(
+                "some-host.com",
+                "tenant_custom_domain=tenant.custom.com");
+
+            await Assert.ThrowsAsync<HttpRequestException>(() => service.Logout(httpContext, null));
+        }
+
+        // Domains set directly in configuration by the developer are trusted and are not validated.
+        [Fact]
+        public async Task Logout_Should_NotValidateTenantCustomDomainFromConfig()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                TenantCustomDomain = "custom-tenant.com"
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Equal("https://custom-tenant.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+            _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
+        }
 
         private WristbandAuthService setupWristbandAuthService(WristbandAuthConfig authConfig)
         {

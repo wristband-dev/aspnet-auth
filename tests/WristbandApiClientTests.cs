@@ -347,24 +347,30 @@ public class WristbandApiClientTests
         Assert.Equal(errorResponse.ErrorDescription, exception.ErrorDescription);
     }
 
+    // A 400 whose body is not the expected JSON (for example an HTML error page served by a proxy
+    // or CDN) must surface as the HTTP failure it actually is, rather than as a parse error that
+    // hides the status code.
     [Fact]
-    public async Task GetTokens_MalformedErrorResponse_ThrowsInvalidOperationException()
+    public async Task GetTokens_MalformedErrorResponse_ThrowsHttpRequestException()
     {
         var code = "auth-code";
         var redirectUri = "https://app.example.com/callback";
         var codeVerifier = "code-verifier";
 
-        SetupHttpResponse(HttpStatusCode.BadRequest, "invalid-json");
+        SetupHttpResponse(HttpStatusCode.BadRequest, "<html><body>Bad Request</body></html>");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(
             () => _wristbandApiClient.GetTokens(code, redirectUri, codeVerifier)
         );
 
-        Assert.Equal("Error while parsing the token error response JSON.", exception.Message);
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+
+        // A 400 is a client-side problem, so it must not be retried.
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Once());
     }
 
     [Fact]
-    public async Task GetTokens_NullErrorResponse_ThrowsInvalidOperationException()
+    public async Task GetTokens_NullErrorResponse_ThrowsHttpRequestException()
     {
         var code = "auth-code";
         var redirectUri = "https://app.example.com/callback";
@@ -372,11 +378,35 @@ public class WristbandApiClientTests
 
         SetupHttpResponse(HttpStatusCode.BadRequest, "null");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(
             () => _wristbandApiClient.GetTokens(code, redirectUri, codeVerifier)
         );
 
-        Assert.Equal("Failed to deserialize the token error response.", exception.Message);
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+    }
+
+    // A 400 that is a genuine OAuth2 error other than invalid_grant must also surface as the HTTP
+    // failure rather than being swallowed.
+    [Fact]
+    public async Task GetTokens_NonInvalidGrantErrorResponse_ThrowsHttpRequestException()
+    {
+        var code = "auth-code";
+        var redirectUri = "https://app.example.com/callback";
+        var codeVerifier = "code-verifier";
+
+        var errorResponse = new WristbandTokenResponseError
+        {
+            Error = "invalid_request",
+            ErrorDescription = "The request is missing a required parameter"
+        };
+
+        SetupHttpResponse(HttpStatusCode.BadRequest, JsonSerializer.Serialize(errorResponse));
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.GetTokens(code, redirectUri, codeVerifier)
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
     }
 
     [Fact]
@@ -630,7 +660,8 @@ public class WristbandApiClientTests
 
         await _wristbandApiClient.RevokeRefreshToken(refreshToken);
 
-        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/revoke", Times.Once());
+        // A 5xx is transient, so every retry attempt is used before the error is swallowed.
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/revoke", Times.Exactly(3));
     }
 
     [Fact]
@@ -647,7 +678,228 @@ public class WristbandApiClientTests
 
         await _wristbandApiClient.RevokeRefreshToken(refreshToken);
 
-        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/revoke", Times.Once());
+        // A network error is transient, so every retry attempt is used before the error is swallowed.
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/revoke", Times.Exactly(3));
+    }
+
+    // ////////////////////////////////////
+    //  VALIDATE TENANT CUSTOM DOMAIN TESTS
+    // ////////////////////////////////////
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ValidateTenantCustomDomain_ValidResponse_ReturnsResult(bool valid)
+    {
+        SetupHttpResponse(HttpStatusCode.OK, JsonSerializer.Serialize(new { valid }));
+
+        var result = await _wristbandApiClient.ValidateTenantCustomDomain("tenant.custom.com");
+
+        Assert.Equal(valid, result);
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/custom-domains/validate", Times.Once());
+    }
+
+    [Fact]
+    public async Task ValidateTenantCustomDomain_SendsDomainInRequestBody()
+    {
+        string? capturedBody = null;
+        string? capturedContentType = null;
+
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .Returns(async (HttpRequestMessage request, CancellationToken _) =>
+            {
+                capturedBody = request.Content == null ? null : await request.Content.ReadAsStringAsync();
+                capturedContentType = request.Content?.Headers.ContentType?.MediaType;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"valid\":true}")
+                };
+            });
+
+        await _wristbandApiClient.ValidateTenantCustomDomain("tenant.custom.com");
+
+        Assert.Equal("{\"tenantCustomDomain\":\"tenant.custom.com\"}", capturedBody);
+        Assert.Equal("application/json", capturedContentType);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ValidateTenantCustomDomain_WithEmptyDomain_ThrowsArgumentException(string domain)
+    {
+        var exception = await Assert.ThrowsAsync<ArgumentException>(
+            () => _wristbandApiClient.ValidateTenantCustomDomain(domain)
+        );
+
+        Assert.Equal("tenantCustomDomain", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task ValidateTenantCustomDomain_ServerError_RetriesThenThrows()
+    {
+        SetupHttpResponse(HttpStatusCode.InternalServerError, "Server Error");
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.ValidateTenantCustomDomain("tenant.custom.com")
+        );
+
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/custom-domains/validate", Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task ValidateTenantCustomDomain_ClientError_DoesNotRetry()
+    {
+        SetupHttpResponse(HttpStatusCode.BadRequest, "Bad Request");
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.ValidateTenantCustomDomain("tenant.custom.com")
+        );
+
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/custom-domains/validate", Times.Once());
+    }
+
+    [Fact]
+    public async Task ValidateTenantCustomDomain_MalformedResponse_ThrowsInvalidOperationException()
+    {
+        SetupHttpResponse(HttpStatusCode.OK, "not-json");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _wristbandApiClient.ValidateTenantCustomDomain("tenant.custom.com")
+        );
+
+        Assert.Equal("Error while parsing the tenant custom domain validation response JSON.", exception.Message);
+
+        // A malformed body is not transient, so it must not be retried.
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/custom-domains/validate", Times.Once());
+    }
+
+    // ////////////////////////////////////
+    //  RETRY TESTS
+    // ////////////////////////////////////
+
+    [Fact]
+    public async Task GetSdkConfiguration_ServerError_RetriesThenThrows()
+    {
+        SetupHttpResponse(HttpStatusCode.InternalServerError, "Server Error");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _wristbandApiClient.GetSdkConfiguration());
+
+        VerifyHttpRequest(
+            HttpMethod.Get,
+            $"https://{_domain}/api/v1/clients/test-client-id/sdk-configuration",
+            Times.Exactly(3));
+    }
+
+    [Fact]
+    public async Task GetSdkConfiguration_TransientFailure_RecoversOnRetry()
+    {
+        var sdkConfig = new SdkConfiguration
+        {
+            LoginUrl = "https://login.example.com",
+            RedirectUri = "https://callback.example.com"
+        };
+
+        _mockHttpMessageHandler
+            .Protected()
+            .SetupSequence<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            {
+                Content = new StringContent("Service Unavailable")
+            })
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(sdkConfig))
+            });
+
+        var result = await _wristbandApiClient.GetSdkConfiguration();
+
+        Assert.Equal("https://login.example.com", result.LoginUrl);
+        VerifyHttpRequest(
+            HttpMethod.Get,
+            $"https://{_domain}/api/v1/clients/test-client-id/sdk-configuration",
+            Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task GetUserinfo_ServerError_RetriesThenThrows()
+    {
+        SetupHttpResponse(HttpStatusCode.BadGateway, "Bad Gateway");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _wristbandApiClient.GetUserinfo("access-token"));
+
+        VerifyHttpRequest(HttpMethod.Get, $"https://{_domain}/api/v1/oauth2/userinfo", Times.Exactly(3));
+    }
+
+    // An access token that is simply invalid is a client-side problem, so a retry cannot fix it.
+    [Fact]
+    public async Task GetUserinfo_Unauthorized_DoesNotRetry()
+    {
+        SetupHttpResponse(HttpStatusCode.Unauthorized, "Unauthorized");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => _wristbandApiClient.GetUserinfo("access-token"));
+
+        VerifyHttpRequest(HttpMethod.Get, $"https://{_domain}/api/v1/oauth2/userinfo", Times.Once());
+    }
+
+    [Fact]
+    public async Task GetTokens_ServerError_RetriesThenThrows()
+    {
+        SetupHttpResponse(HttpStatusCode.InternalServerError, "Server Error");
+
+        await Assert.ThrowsAsync<HttpRequestException>(
+            () => _wristbandApiClient.GetTokens("code", "https://app.example.com/callback", "verifier")
+        );
+
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Exactly(3));
+    }
+
+    // An expired or already-used authorization code cannot succeed on a retry.
+    [Fact]
+    public async Task GetTokens_InvalidGrant_DoesNotRetry()
+    {
+        var errorResponse = new WristbandTokenResponseError
+        {
+            Error = "invalid_grant",
+            ErrorDescription = "The authorization code is invalid or has expired"
+        };
+
+        SetupHttpResponse(HttpStatusCode.BadRequest, JsonSerializer.Serialize(errorResponse));
+
+        await Assert.ThrowsAsync<InvalidGrantError>(
+            () => _wristbandApiClient.GetTokens("code", "https://app.example.com/callback", "verifier")
+        );
+
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Once());
+    }
+
+    [Fact]
+    public async Task RefreshToken_ServerError_RetriesThenThrows()
+    {
+        SetupTokenResponse(HttpStatusCode.InternalServerError, null);
+
+        var exception = await Assert.ThrowsAsync<WristbandError>(
+            () => _wristbandApiClient.RefreshToken("refresh-token")
+        );
+
+        Assert.Equal("unexpected_error", exception.Error);
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Exactly(3));
+    }
+
+    // A refresh token that is no longer valid cannot succeed on a retry.
+    [Fact]
+    public async Task RefreshToken_InvalidRefreshToken_DoesNotRetry()
+    {
+        SetupTokenResponse(HttpStatusCode.Unauthorized, null);
+
+        var exception = await Assert.ThrowsAsync<WristbandError>(
+            () => _wristbandApiClient.RefreshToken("refresh-token")
+        );
+
+        Assert.Equal("invalid_refresh_token", exception.Error);
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Once());
     }
 
     // ////////////////////////////////////

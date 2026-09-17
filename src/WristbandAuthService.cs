@@ -11,8 +11,6 @@ public class WristbandAuthService : IWristbandAuthService
     private const string TenantDomainPlaceholder = "{tenant_domain}";
     private const string TenantNamePlaceholder = "{tenant_name}";
     private const string LoginRequiredError = "login_required";
-    private const int TokenRefreshRetryAttempts = 3;
-    private const int DelayBetweenRefreshAttempts = 100; // 100ms
 
     private readonly IWristbandApiClient _wristbandApiClient;
     private readonly ILoginStateHandler _loginStateHandler;
@@ -88,7 +86,9 @@ public class WristbandAuthService : IWristbandAuthService
         var wristbandApplicationVanityDomain = _configResolver.GetWristbandApplicationVanityDomain();
 
         // Determine which domain-related values are present as it will be needed for the authorize URL.
-        var tenantCustomDomain = ResolveTenantCustomDomainParam(context);
+        // An invalid tenant custom domain is skipped over rather than failing the login, so resolution
+        // falls through to the next domain in the precedence order below.
+        var tenantCustomDomain = await ResolveValidTenantCustomDomainParam(context);
         var tenantName = ResolveTenantName(context, parseTenantFromRootDomain);
         var defaultTenantCustomDomain = loginConfig.DefaultTenantCustomDomain ?? string.Empty;
         var defaultTenantName = loginConfig.DefaultTenantName ?? string.Empty;
@@ -214,7 +214,9 @@ public class WristbandAuthService : IWristbandAuthService
         var code = query["code"].FirstOrDefault();
         var error = query["error"].FirstOrDefault();
         var errorDescription = query["error_description"].FirstOrDefault();
-        var tenantCustomDomainParam = query["tenant_custom_domain"].FirstOrDefault();
+
+        // An invalid tenant custom domain is skipped over rather than failing the callback.
+        var tenantCustomDomainParam = await ResolveValidTenantCustomDomainParam(context);
 
         if (string.IsNullOrEmpty(paramState) || query["state"].Count > 1)
         {
@@ -315,7 +317,7 @@ public class WristbandAuthService : IWristbandAuthService
                 tokenResponse?.RefreshToken,
                 userInfo,
                 resolvedTenantName,
-                tenantCustomDomainParam,
+                string.IsNullOrEmpty(tenantCustomDomainParam) ? null : tenantCustomDomainParam,
                 loginState.CustomState,
                 loginState.ReturnUrl);
             return new CallbackResult(CallbackResultType.Completed, callbackData, null);
@@ -363,7 +365,10 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         var tenantName = ResolveTenantName(context, parseTenantFromRootDomain);
-        var tenantCustomDomainParam = ResolveTenantCustomDomainParam(context);
+
+        // An invalid tenant custom domain is skipped over rather than failing the logout, so
+        // resolution falls through to the next domain in the precedence order below.
+        var tenantCustomDomainParam = await ResolveValidTenantCustomDomainParam(context);
         var redirectUrl = !string.IsNullOrEmpty(logoutConfig.RedirectUrl) ? $"&redirect_url={logoutConfig.RedirectUrl}" : string.Empty;
         var state = !string.IsNullOrEmpty(logoutConfig.State) ? $"&state={Uri.EscapeDataString(logoutConfig.State)}" : string.Empty;
 
@@ -430,43 +435,17 @@ public class WristbandAuthService : IWristbandAuthService
         // Fetch our SDK configs using the ConfigResolver
         var tokenExpirationBuffer = _configResolver.GetTokenExpirationBuffer();
 
-        // Make 3 attempts to refresh the token
-        for (int attempt = 1; attempt <= TokenRefreshRetryAttempts; attempt++)
-        {
-            try
-            {
-                var tokenResponse = await _wristbandApiClient.RefreshToken(refreshToken);
-                var newExpiresIn = (tokenResponse?.ExpiresIn ?? 0) - tokenExpirationBuffer;
-                var newExpiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (newExpiresIn * 1000);
-                return new TokenData(
-                    tokenResponse?.AccessToken ?? string.Empty,
-                    newExpiresAt,
-                    newExpiresIn,
-                    tokenResponse?.IdToken ?? string.Empty,
-                    tokenResponse?.RefreshToken);
-            }
-            catch (WristbandError ex)
-            {
-                // Bail the process on invalid refresh token
-                if (ex.Error == "invalid_refresh_token" || attempt == TokenRefreshRetryAttempts)
-                {
-                    throw;
-                }
-
-                await Task.Delay(TokenRefreshRetryAttempts);
-            }
-            catch (Exception)
-            {
-                if (attempt == TokenRefreshRetryAttempts)
-                {
-                    throw;
-                }
-
-                await Task.Delay(DelayBetweenRefreshAttempts);
-            }
-        }
-
-        throw new InvalidOperationException("Invalid state reached during refresh token operation.");
+        // Retrying transient failures is handled by the API client, so this makes a single call.
+        // Retrying here as well would compound the two policies into far more attempts than intended.
+        var tokenResponse = await _wristbandApiClient.RefreshToken(refreshToken);
+        var newExpiresIn = (tokenResponse?.ExpiresIn ?? 0) - tokenExpirationBuffer;
+        var newExpiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (newExpiresIn * 1000);
+        return new TokenData(
+            tokenResponse?.AccessToken ?? string.Empty,
+            newExpiresAt,
+            newExpiresIn,
+            tokenResponse?.IdToken ?? string.Empty,
+            tokenResponse?.RefreshToken);
     }
 
     // ========================================
@@ -564,5 +543,29 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         return resolvedReturnUrl;
+    }
+
+    /// <summary>
+    /// Resolves the tenant_custom_domain query parameter to itself when it is verified and belongs to
+    /// your Wristband application, and to an empty string otherwise so that the caller skips over it
+    /// and falls through to the next domain in its resolution precedence order.
+    /// </summary>
+    /// <remarks>
+    /// Validation only applies to domains supplied via the tenant_custom_domain query parameter, which
+    /// is attacker-controllable. Domains set directly in configuration by the developer are trusted and
+    /// are not validated.
+    /// </remarks>
+    /// <param name="context">The current HTTP context.</param>
+    /// <returns>A task that represents the asynchronous operation and contains the validated domain, or an empty string.</returns>
+    private async Task<string> ResolveValidTenantCustomDomainParam(HttpContext context)
+    {
+        var tenantCustomDomainParam = ResolveTenantCustomDomainParam(context);
+        if (string.IsNullOrEmpty(tenantCustomDomainParam))
+        {
+            return string.Empty;
+        }
+
+        var isValid = await _wristbandApiClient.ValidateTenantCustomDomain(tenantCustomDomainParam);
+        return isValid ? tenantCustomDomainParam : string.Empty;
     }
 }

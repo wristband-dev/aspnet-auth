@@ -965,6 +965,11 @@ Wristband supports various tenant domain configurations, including subdomains an
 
 If none of these are specified, the SDK returns the URL for the Application-Level Login (Tenant Discovery) Page.
 
+> [!NOTE]
+> The `tenant_custom_domain` query parameter (#1) is validated against the Wristband tenant custom domain
+> validation API. If the value is not a valid tenant custom domain for your application, it is ignored and
+> skipped over during evaluation, and the SDK continues on to the next entry in the precedence order above.
+
 #### Tenant Name Query Param
 
 If your application does not wish to utilize subdomains for each tenant, you can pass the `tenant_name` query parameter to your Login Endpoint, and the SDK will be able to make the appropriate redirection to the Wristband Authorize Endpoint.
@@ -1030,6 +1035,14 @@ GET https://yourapp.io/auth/login?tenant_custom_domain=mytenant.com
 ```
 
 The tenant custom domain takes precedence over all other possible domains else when present.
+
+> [!NOTE]
+> This query parameter is validated against the Wristband tenant custom domain validation API before the
+> SDK redirects to it. If the value is not a valid tenant custom domain for your application, it is ignored
+> and skipped over during evaluation, and the SDK falls through to the next domain in the precedence order.
+> Because this value comes from the request, validating it prevents external users from manipulating where
+> the SDK sends them. The `DefaultTenantCustomDomain` config is supplied by you rather than by the request,
+> so it is trusted and is not validated.
 
 #### Default Tenant Custom Domain
 
@@ -1384,6 +1397,13 @@ var wristbandLogoutUrl = await wristbandAuth.Logout(httpContext, logoutConfig);
 ```
 
 If your application supports a mixture of tenants that use tenant subdomains and tenant custom domains, then you should consider passing both the tenant names and tenant custom domains (either via LogoutConfig or by query parameters) to ensure all use cases are handled by the SDK.
+
+> [!NOTE]
+> The `tenant_custom_domain` query parameter is validated against the Wristband tenant custom domain
+> validation API. If the value is not a valid tenant custom domain for your application, it is ignored and
+> skipped over during evaluation, and the SDK continues on to the next entry in the precedence order. The
+> `TenantCustomDomain` field on `LogoutConfig` is supplied by you rather than by the request, so it is
+> trusted and is not validated.
 
 #### Preserving State After Logout
 

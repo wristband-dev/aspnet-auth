@@ -224,7 +224,7 @@ public class DiscoverTests
     }
 
     [Fact]
-    public async Task Discover_Should_HandleMultipleFailuresWithRetry()
+    public async Task Discover_Should_SurfaceFailure_WhenSdkConfigurationFetchFails()
     {
         var authConfig = new WristbandAuthConfig
         {
@@ -235,27 +235,19 @@ public class DiscoverTests
             AutoConfigureEnabled = true,
         };
 
-        // Mock the API client to fail twice, then succeed
         _mockApiClient
-            .SetupSequence(m => m.GetSdkConfiguration())
-            .ThrowsAsync(new HttpRequestException("Temporary failure"))
-            .ThrowsAsync(new HttpRequestException("Another failure"))
-            .ReturnsAsync(new SdkConfiguration
-            {
-                LoginUrl = "https://example.com/login",
-                RedirectUri = "https://example.com/callback",
-                IsApplicationCustomDomainActive = false,
-                CustomApplicationLoginPageUrl = null,
-                LoginUrlTenantDomainSuffix = null
-            });
+            .Setup(m => m.GetSdkConfiguration())
+            .ThrowsAsync(new HttpRequestException("Temporary failure"));
 
         var service = CreateServiceWithMockedApiClient(authConfig);
 
-        // Should succeed after retries
-        await service.Discover();
+        var exception = await Assert.ThrowsAsync<WristbandError>(() => service.Discover());
+        Assert.Equal("sdk_config_error", exception.Error);
+        Assert.Contains("Temporary failure", exception.ErrorDescription);
 
-        // Verify that multiple attempts were made
-        _mockApiClient.Verify(m => m.GetSdkConfiguration(), Times.Exactly(3));
+        // Retrying transient failures happens inside the API client, which is mocked out here, so
+        // the service makes exactly one call.
+        _mockApiClient.Verify(m => m.GetSdkConfiguration(), Times.Once());
     }
 
     private WristbandAuthService CreateServiceWithMockedApiClient(WristbandAuthConfig authConfig)
