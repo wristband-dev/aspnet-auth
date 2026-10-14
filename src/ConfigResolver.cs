@@ -6,8 +6,6 @@ namespace Wristband.AspNet.Auth;
 /// </summary>
 internal class ConfigResolver
 {
-    private const string TenantDomainPlaceholder = "{tenant_domain}";
-    private const string TenantNamePlaceholder = "{tenant_name}";
     private const int DefaultTokenExpirationBuffer = 60; // 60 seconds
     private static readonly List<string> DefaultScopes = new List<string> { "openid", "offline_access", "email" };
 
@@ -208,10 +206,10 @@ internal class ConfigResolver
     /// <returns>A task that represents the asynchronous operation. The task result contains the root domain for parsing tenant subdomains, or null if not configured.</returns>
     public async Task<string> GetParseTenantFromRootDomain()
     {
-        // 1. Check if manually provided in authConfig
-        if (!string.IsNullOrEmpty(_authConfig.ParseTenantFromRootDomain))
+        // 1. Derive from the manually provided login URL
+        if (!string.IsNullOrEmpty(_authConfig.LoginUrl))
         {
-            return _authConfig.ParseTenantFromRootDomain;
+            return TenantUrlUtils.DeriveTenantRootDomain(_authConfig.LoginUrl);
         }
 
         // 2. If auto-configure is enabled, get from SDK config
@@ -249,13 +247,82 @@ internal class ConfigResolver
     }
 
     /// <summary>
-    /// Checks if a URL contains either the tenant domain placeholder or tenant name placeholder.
+    /// Gets whether application-level authorization requests are enabled (true by default).
     /// </summary>
-    /// <param name="url">The URL to check.</param>
-    /// <returns>True if the URL contains either placeholder; otherwise, false.</returns>
+    /// <returns>A task that represents the asynchronous operation. The task result is true if application-level authorization requests are enabled.</returns>
+    public async Task<bool> GetApplicationAuthorizationRequestsEnabled()
+    {
+        // 1. Check if manually provided in authConfig
+        if (_authConfig.ApplicationAuthorizationRequestsEnabled.HasValue)
+        {
+            return _authConfig.ApplicationAuthorizationRequestsEnabled.Value;
+        }
+
+        // 2. If auto-configure is enabled, get from SDK config
+        if (GetAutoConfigureEnabled())
+        {
+            var sdkConfig = await LoadSdkConfig();
+            return sdkConfig.ApplicationAuthorizationRequestsEnabled;
+        }
+
+        // 3. Default fallback
+        return true;
+    }
+
+    /// <summary>
+    /// Gets the login URL without the {tenant_name} subdomain, which is used when a tenant cannot be resolved and
+    /// application-level authorization requests are enabled.
+    /// </summary>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the fallback login URL, or an empty string.</returns>
+    public async Task<string> GetFallbackLoginUrl()
+    {
+        // 1. Derive from the manually provided login URL
+        if (!string.IsNullOrEmpty(_authConfig.LoginUrl))
+        {
+            return TenantUrlUtils.DeriveFallbackLoginUrl(_authConfig.LoginUrl);
+        }
+
+        // 2. If auto-configure is enabled, get from SDK config
+        if (GetAutoConfigureEnabled())
+        {
+            var sdkConfig = await LoadSdkConfig();
+            return sdkConfig.FallbackLoginUrl ?? string.Empty;
+        }
+
+        // 3. Default fallback
+        return string.Empty;
+    }
+
     private static bool ContainsTenantPlaceholder(string url)
     {
-        return url.Contains(TenantDomainPlaceholder) || url.Contains(TenantNamePlaceholder);
+        return url.Contains(TenantUrlUtils.TenantNamePlaceholder);
+    }
+
+    private static void ValidateTenantPlaceholderPosition(string configName, string url)
+    {
+        if (!TenantUrlUtils.IsTenantPlaceholderPositionValid(url))
+        {
+            throw new ArgumentException(
+                $"The [{configName}] can only contain the {TenantUrlUtils.TenantPlaceholderMessage} once, as the leftmost part of its hostname.");
+        }
+    }
+
+    private static void ValidateMatchingTenantPlaceholders(string loginUrl, string redirectUri)
+    {
+        var loginUrlHasPlaceholder = ContainsTenantPlaceholder(loginUrl);
+        var redirectUriHasPlaceholder = ContainsTenantPlaceholder(redirectUri);
+
+        if (loginUrlHasPlaceholder && !redirectUriHasPlaceholder)
+        {
+            throw new ArgumentException(
+                $"The [RedirectUri] must contain the {TenantUrlUtils.TenantPlaceholderMessage} when the [LoginUrl] contains it.");
+        }
+
+        if (!loginUrlHasPlaceholder && redirectUriHasPlaceholder)
+        {
+            throw new ArgumentException(
+                $"The [RedirectUri] cannot contain the {TenantUrlUtils.TenantPlaceholderMessage} when the [LoginUrl] does not contain it.");
+        }
     }
 
     private async Task<SdkConfiguration> LoadSdkConfig()
@@ -348,69 +415,31 @@ internal class ConfigResolver
             throw new ArgumentException("The [RedirectUri] config must have a value when auto-configure is disabled.");
         }
 
-        var hasRootDomain = !string.IsNullOrEmpty(_authConfig.ParseTenantFromRootDomain);
-        var loginUrlHasToken = ContainsTenantPlaceholder(_authConfig.LoginUrl);
-        var redirectUriHasToken = ContainsTenantPlaceholder(_authConfig.RedirectUri);
-
-        if (hasRootDomain && !loginUrlHasToken)
-        {
-            throw new ArgumentException(
-                $"The [LoginUrl] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
-        }
-
-        if (!hasRootDomain && loginUrlHasToken)
-        {
-            throw new ArgumentException(
-                $"The [LoginUrl] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
-        }
-
-        if (hasRootDomain && !redirectUriHasToken)
-        {
-            throw new ArgumentException(
-                $"The [RedirectUri] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
-        }
-
-        if (!hasRootDomain && redirectUriHasToken)
-        {
-            throw new ArgumentException(
-                $"The [RedirectUri] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
-        }
+        ValidateTenantPlaceholderPosition("LoginUrl", _authConfig.LoginUrl);
+        ValidateTenantPlaceholderPosition("RedirectUri", _authConfig.RedirectUri);
+        ValidateMatchingTenantPlaceholders(_authConfig.LoginUrl, _authConfig.RedirectUri);
     }
 
+    /// <summary>
+    /// Validates the manually provided URL configs when auto-configure is enabled. When only one of the two URLs is
+    /// provided, the placeholder comparison happens in <see cref="ValidateAllDynamicConfigs"/> instead, once the other
+    /// URL is available from the SDK Auto-Configuration Endpoint.
+    /// </summary>
     private void ValidatePartialUrlAuthConfigs()
     {
-        var hasRootDomain = !string.IsNullOrEmpty(_authConfig.ParseTenantFromRootDomain);
-
         if (!string.IsNullOrEmpty(_authConfig.LoginUrl))
         {
-            var hasToken = ContainsTenantPlaceholder(_authConfig.LoginUrl);
-            if (hasRootDomain && !hasToken)
-            {
-                throw new ArgumentException(
-                    $"The [LoginUrl] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
-            }
-
-            if (!hasRootDomain && hasToken)
-            {
-                throw new ArgumentException(
-                    $"The [LoginUrl] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
-            }
+            ValidateTenantPlaceholderPosition("LoginUrl", _authConfig.LoginUrl);
         }
 
         if (!string.IsNullOrEmpty(_authConfig.RedirectUri))
         {
-            var hasToken = ContainsTenantPlaceholder(_authConfig.RedirectUri);
-            if (hasRootDomain && !hasToken)
-            {
-                throw new ArgumentException(
-                    $"The [RedirectUri] must contain the \"{TenantNamePlaceholder}\" token when using the [ParseTenantFromRootDomain] config.");
-            }
+            ValidateTenantPlaceholderPosition("RedirectUri", _authConfig.RedirectUri);
+        }
 
-            if (!hasRootDomain && hasToken)
-            {
-                throw new ArgumentException(
-                    $"The [RedirectUri] cannot contain the \"{TenantNamePlaceholder}\" token when the [ParseTenantFromRootDomain] is absent.");
-            }
+        if (!string.IsNullOrEmpty(_authConfig.LoginUrl) && !string.IsNullOrEmpty(_authConfig.RedirectUri))
+        {
+            ValidateMatchingTenantPlaceholders(_authConfig.LoginUrl, _authConfig.RedirectUri);
         }
     }
 
@@ -419,8 +448,6 @@ internal class ConfigResolver
         // Use manual config values if provided, otherwise use SDK config values
         var loginUrl = _authConfig.LoginUrl ?? sdkConfiguration.LoginUrl;
         var redirectUri = _authConfig.RedirectUri ?? sdkConfiguration.RedirectUri;
-        var parseTenantFromRootDomain = _authConfig.ParseTenantFromRootDomain ??
-            sdkConfiguration.LoginUrlTenantDomainSuffix;
 
         // Validate that required fields are present in the SDK config response
         if (string.IsNullOrEmpty(loginUrl))
@@ -435,36 +462,26 @@ internal class ConfigResolver
                 "The [RedirectUri] could not be resolved. Provide it explicitly in your SDK config or ensure your Wristband OAuth2 Client has a single redirect URI configured.");
         }
 
-        var hasRootDomain = !string.IsNullOrEmpty(parseTenantFromRootDomain);
-        var loginUrlHasToken = ContainsTenantPlaceholder(loginUrl);
-        var redirectUriHasToken = ContainsTenantPlaceholder(redirectUri);
-
-        if (hasRootDomain && !loginUrlHasToken)
+        // Only one of LoginUrl and RedirectUri may have come from the manual config, so compare the final resolved
+        // values. Values that both come from the SDK Auto-Configuration Endpoint are trusted as-is.
+        if (!string.IsNullOrEmpty(_authConfig.LoginUrl) || !string.IsNullOrEmpty(_authConfig.RedirectUri))
         {
-            throw new WristbandError(
-                "config_validation_error",
-                $"The resolved [LoginUrl] must contain the \"{TenantNamePlaceholder}\" token when using [ParseTenantFromRootDomain].");
-        }
+            var loginUrlHasPlaceholder = ContainsTenantPlaceholder(loginUrl);
+            var redirectUriHasPlaceholder = ContainsTenantPlaceholder(redirectUri);
 
-        if (!hasRootDomain && loginUrlHasToken)
-        {
-            throw new WristbandError(
-                "config_validation_error",
-                $"The resolved [LoginUrl] cannot contain the \"{TenantNamePlaceholder}\" token when [ParseTenantFromRootDomain] is absent.");
-        }
+            if (loginUrlHasPlaceholder && !redirectUriHasPlaceholder)
+            {
+                throw new WristbandError(
+                    "config_validation_error",
+                    $"The resolved [RedirectUri] must contain the {TenantUrlUtils.TenantPlaceholderMessage} when the resolved [LoginUrl] contains it.");
+            }
 
-        if (hasRootDomain && !redirectUriHasToken)
-        {
-            throw new WristbandError(
-                "config_validation_error",
-                $"The resolved [RedirectUri] must contain the \"{TenantNamePlaceholder}\" token when using [ParseTenantFromRootDomain].");
-        }
-
-        if (!hasRootDomain && redirectUriHasToken)
-        {
-            throw new WristbandError(
-                "config_validation_error",
-                $"The resolved [RedirectUri] cannot contain the \"{TenantNamePlaceholder}\" token when [ParseTenantFromRootDomain] is absent.");
+            if (!loginUrlHasPlaceholder && redirectUriHasPlaceholder)
+            {
+                throw new WristbandError(
+                    "config_validation_error",
+                    $"The resolved [RedirectUri] cannot contain the {TenantUrlUtils.TenantPlaceholderMessage} when the resolved [LoginUrl] does not contain it.");
+            }
         }
     }
 }

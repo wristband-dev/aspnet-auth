@@ -8,9 +8,9 @@ namespace Wristband.AspNet.Auth;
 /// <inheritdoc cref="IWristbandAuthService" />
 public class WristbandAuthService : IWristbandAuthService
 {
-    private const string TenantDomainPlaceholder = "{tenant_domain}";
-    private const string TenantNamePlaceholder = "{tenant_name}";
     private const string LoginRequiredError = "login_required";
+    private static readonly TimeSpan LoginStateMaxAge = TimeSpan.FromHours(1);
+    private static readonly TimeSpan LoginStateClockSkew = TimeSpan.FromMinutes(1);
 
     private readonly IWristbandApiClient _wristbandApiClient;
     private readonly ILoginStateHandler _loginStateHandler;
@@ -75,6 +75,7 @@ public class WristbandAuthService : IWristbandAuthService
         response.Headers.Append("Pragma", "no-cache");
 
         // Fetch our SDK configs using the ConfigResolver
+        var applicationAuthorizationRequestsEnabled = await _configResolver.GetApplicationAuthorizationRequestsEnabled();
         var clientId = _configResolver.GetClientId();
         var customApplicationLoginPageUrl = await _configResolver.GetCustomApplicationLoginPageUrl();
         var dangerouslyDisableSecureCookies = _configResolver.GetDangerouslyDisableSecureCookies();
@@ -94,12 +95,14 @@ public class WristbandAuthService : IWristbandAuthService
         var defaultTenantName = loginConfig.DefaultTenantName ?? string.Empty;
 
         var resolvedReturnUrl = ResolveReturnUrl(context, loginConfig.ReturnUrl);
-
-        // In the event we cannot determine either a tenant custom domain or subdomain, send the user to app-level login.
-        if (string.IsNullOrEmpty(tenantCustomDomain) &&
+        var isTenantUnresolved = string.IsNullOrEmpty(tenantCustomDomain) &&
             string.IsNullOrEmpty(tenantName) &&
             string.IsNullOrEmpty(defaultTenantCustomDomain) &&
-            string.IsNullOrEmpty(defaultTenantName))
+            string.IsNullOrEmpty(defaultTenantName);
+
+        // In the event we cannot determine either a tenant custom domain or subdomain, and app-level authorization
+        // requests are disabled, send the user to the app-level login page.
+        if (isTenantUnresolved && !applicationAuthorizationRequestsEnabled)
         {
             var apploginUrl = !string.IsNullOrEmpty(customApplicationLoginPageUrl)
                 ? customApplicationLoginPageUrl : $"https://{wristbandApplicationVanityDomain}/login";
@@ -116,9 +119,10 @@ public class WristbandAuthService : IWristbandAuthService
 
         var loginState = _loginStateHandler.CreateLoginState(context, redirectUri, resolvedReturnUrl, customState);
 
-        _loginStateHandler.CreateLoginStateCookie(context, loginState, loginStateSecret, dangerouslyDisableSecureCookies);
+        var cookieDomain = GetLoginStateCookieDomain(applicationAuthorizationRequestsEnabled, parseTenantFromRootDomain);
+        _loginStateHandler.CreateLoginStateCookie(context, loginState, loginStateSecret, dangerouslyDisableSecureCookies, cookieDomain);
 
-        // Create the Wristband Authorize Endpoint URL which the user will get redirectd to.
+        // Create the Wristband Authorize Endpoint URL which the user will get redirected to.
         var queryParams = new Dictionary<string, string>
         {
             { "client_id", clientId },
@@ -162,6 +166,13 @@ public class WristbandAuthService : IWristbandAuthService
             .Where(p => p.Value != null)
             .Select(p => $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
 
+        // When no tenant can be resolved, send users to the app-level Authorize Endpoint with a login state cookie
+        // instead of going to the app-level login page. Wristband handles tenant discovery within that same flow.
+        if (isTenantUnresolved)
+        {
+            return $"https://{wristbandApplicationVanityDomain}/api/v1/oauth2/authorize?{queryString}";
+        }
+
         // Domain priority order resolution:
         // 1)  tenant_custom_domain query param
         // 2a) tenant subdomain
@@ -196,6 +207,7 @@ public class WristbandAuthService : IWristbandAuthService
         context.Response.Headers.Append("Pragma", "no-cache");
 
         // Fetch our SDK configs using the ConfigResolver
+        var applicationAuthorizationRequestsEnabled = await _configResolver.GetApplicationAuthorizationRequestsEnabled();
         var dangerouslyDisableSecureCookies = _configResolver.GetDangerouslyDisableSecureCookies();
         var loginStateSecret = _configResolver.GetLoginStateSecret();
         var loginUrl = await _configResolver.GetLoginUrl();
@@ -240,10 +252,7 @@ public class WristbandAuthService : IWristbandAuthService
         string tenantLoginUrl;
         if (!string.IsNullOrEmpty(parseTenantFromRootDomain))
         {
-            // Replace both {tenant_name} and {tenant_domain} for backwards compatibility
-            tenantLoginUrl = loginUrl
-                .Replace(TenantNamePlaceholder, resolvedTenantName)
-                .Replace(TenantDomainPlaceholder, resolvedTenantName);
+            tenantLoginUrl = loginUrl.Replace(TenantUrlUtils.TenantNamePlaceholder, resolvedTenantName);
         }
         else
         {
@@ -257,7 +266,8 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         // Make sure the login state cookie exists, extract it, and set it to be cleared by the server.
-        var loginStateCookie = _loginStateHandler.GetAndClearLoginStateCookie(context, dangerouslyDisableSecureCookies);
+        var cookieDomain = GetLoginStateCookieDomain(applicationAuthorizationRequestsEnabled, parseTenantFromRootDomain);
+        var loginStateCookie = _loginStateHandler.GetAndClearLoginStateCookie(context, dangerouslyDisableSecureCookies, cookieDomain);
         if (string.IsNullOrEmpty(loginStateCookie))
         {
             return new CallbackResult(
@@ -267,9 +277,10 @@ public class WristbandAuthService : IWristbandAuthService
                 CallbackFailureReason.MissingLoginState);
         }
 
-        // Check for any invalid login or mismatched login state
-        var loginState = _loginStateHandler.DecryptLoginState(loginStateCookie, loginStateSecret);
-        if (loginState == null || paramState != loginState.State)
+        // Check for any invalid login or mismatched login state. A cookie that cannot be decrypted (tampered,
+        // malformed, or encrypted with a different secret) or is older than its lifetime can't be trusted.
+        var loginState = TryDecryptLoginState(loginStateCookie, loginStateSecret);
+        if (loginState == null || paramState != loginState.State || IsLoginStateExpired(loginState))
         {
             return new CallbackResult(
                 CallbackResultType.RedirectRequired,
@@ -309,6 +320,16 @@ public class WristbandAuthService : IWristbandAuthService
 
             var expiresIn = (tokenResponse?.ExpiresIn ?? 0) - tokenExpirationBuffer;
             var expiresAt = DateTimeOffset.Now.ToUnixTimeMilliseconds() + (expiresIn * 1000);
+
+            // Prevent open redirects by validating the return URL against allowed hosts.
+            var validatedReturnUrl = TenantUrlUtils.ValidateReturnUrl(
+                loginState.ReturnUrl,
+                string.IsNullOrEmpty(context.Request.Scheme) ? "https" : context.Request.Scheme,
+                context.Request.Host.Value ?? string.Empty,
+                resolvedTenantName,
+                applicationAuthorizationRequestsEnabled,
+                parseTenantFromRootDomain);
+
             var callbackData = new CallbackData(
                 tokenResponse?.AccessToken ?? string.Empty,
                 expiresAt,
@@ -319,7 +340,7 @@ public class WristbandAuthService : IWristbandAuthService
                 resolvedTenantName,
                 string.IsNullOrEmpty(tenantCustomDomainParam) ? null : tenantCustomDomainParam,
                 loginState.CustomState,
-                loginState.ReturnUrl);
+                validatedReturnUrl);
             return new CallbackResult(CallbackResultType.Completed, callbackData, null);
         }
         catch (InvalidGrantError)
@@ -353,6 +374,7 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         // Fetch our SDK configs using the ConfigResolver
+        var applicationAuthorizationRequestsEnabled = await _configResolver.GetApplicationAuthorizationRequestsEnabled();
         var clientId = _configResolver.GetClientId();
         var customApplicationLoginPageUrl = await _configResolver.GetCustomApplicationLoginPageUrl();
         var isApplicationCustomDomainActive = await _configResolver.GetIsApplicationCustomDomainActive();
@@ -402,13 +424,28 @@ public class WristbandAuthService : IWristbandAuthService
             return $"https://{tenantName}{separator}{wristbandApplicationVanityDomain}{logoutPath}";
         }
 
-        // Fallback to app login URL (or custom logout redirect URL) if tenant cannot be determined
+        // 5) First try falling back to the logout redirect URL (if the LogoutConfig has it) when tenant cannot be resolved.
+        if (!string.IsNullOrEmpty(logoutConfig.RedirectUrl))
+        {
+            return logoutConfig.RedirectUrl;
+        }
+
+        // 6) If app-level authorization requests are enabled, then redirect to the appropriate app-level Login Endpoint
+        // to start a new app-level Authorize Endpoint flow.
+        if (applicationAuthorizationRequestsEnabled)
+        {
+            var loginUrl = await _configResolver.GetLoginUrl();
+            return loginUrl.Contains(TenantUrlUtils.TenantNamePlaceholder)
+                ? await _configResolver.GetFallbackLoginUrl()
+                : loginUrl;
+        }
+
+        // 7a) If a custom page URL is set, fallback to that Application-Level Login when tenant cannot be resolved.
+        // 7b) Finally, fallback to the Wristband-hosted Application-Level Login Page when tenant cannot be resolved.
         var appLoginUrl = !string.IsNullOrEmpty(customApplicationLoginPageUrl)
             ? customApplicationLoginPageUrl
             : $"https://{wristbandApplicationVanityDomain}/login";
-        return !string.IsNullOrEmpty(logoutConfig.RedirectUrl)
-                ? logoutConfig.RedirectUrl
-                : $"{appLoginUrl}?client_id={clientId}";
+        return $"{appLoginUrl}?client_id={clientId}";
     }
 
     /// <summary>
@@ -457,6 +494,22 @@ public class WristbandAuthService : IWristbandAuthService
         var challengeBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(codeVerifier));
         var base64 = Convert.ToBase64String(challengeBytes);
         return base64.Replace("+", "-").Replace("/", "_").TrimEnd('=');
+    }
+
+    private static string? GetLoginStateCookieDomain(bool applicationAuthorizationRequestsEnabled, string parseTenantFromRootDomain)
+    {
+        // With app-level authorization requests and tenant subdomains, the login can start on the root domain and
+        // finish on a tenant subdomain, so the login state cookie must be readable across both.
+        return applicationAuthorizationRequestsEnabled && !string.IsNullOrEmpty(parseTenantFromRootDomain)
+            ? $".{parseTenantFromRootDomain}"
+            : null;
+    }
+
+    private static bool IsLoginStateExpired(LoginState loginState)
+    {
+        var createdAt = DateTimeOffset.FromUnixTimeMilliseconds(loginState.CreatedAt);
+        var now = DateTimeOffset.UtcNow;
+        return now - createdAt > LoginStateMaxAge + LoginStateClockSkew || createdAt - now > LoginStateClockSkew;
     }
 
     private static bool IsExpired(long expiresAt)
@@ -543,6 +596,18 @@ public class WristbandAuthService : IWristbandAuthService
         }
 
         return resolvedReturnUrl;
+    }
+
+    private LoginState? TryDecryptLoginState(string loginStateCookie, string loginStateSecret)
+    {
+        try
+        {
+            return _loginStateHandler.DecryptLoginState(loginStateCookie, loginStateSecret);
+        }
+        catch (Exception ex) when (ex is ArgumentException or FormatException or CryptographicException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
