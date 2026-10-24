@@ -518,18 +518,15 @@ public class WristbandAuthService : IWristbandAuthService
         return currentTime >= expiresAt;
     }
 
-    private static string ParseTenantSubdomain(string host, string parseTenantFromRootDomain)
+    private static string ParseTenantSubdomain(string hostname, string parseTenantFromRootDomain)
     {
-        if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(parseTenantFromRootDomain))
+        if (string.IsNullOrEmpty(hostname) || string.IsNullOrEmpty(parseTenantFromRootDomain))
         {
             return string.Empty;
         }
 
-        // Strip port, if present
-        var hostname = host.Split(':')[0];
-
         // Attempt to strip out subdomain and ensure the root domain matches SDK configuration
-        var dotIndex = host.IndexOf('.');
+        var dotIndex = hostname.IndexOf('.');
         if (dotIndex < 0)
         {
             return string.Empty;
@@ -548,8 +545,9 @@ public class WristbandAuthService : IWristbandAuthService
     {
         if (!string.IsNullOrEmpty(parseTenantFromRootDomain))
         {
-            var host = context.Request.Host.Value ?? string.Empty;
-            return ParseTenantSubdomain(host, parseTenantFromRootDomain);
+            // HostString.Host is the hostname without the port (IPv6 literals stay bracketed). Behind a reverse proxy,
+            // the Forwarded Headers Middleware sets it from X-Forwarded-Host for trusted proxies only.
+            return ParseTenantSubdomain(context.Request.Host.Host ?? string.Empty, parseTenantFromRootDomain);
         }
 
         var tenantNameParam = context.Request.Query["tenant_name"].FirstOrDefault();

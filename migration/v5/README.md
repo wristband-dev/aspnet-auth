@@ -157,7 +157,7 @@ if (callbackResult.Type == CallbackResultType.Completed)
 
 **Key Changes:**
 1. Relative paths (e.g. `/settings`) resolve against the current request's host
-2. The scheme must match the request's scheme, which blocks downgrades like `https` to `http` (behind a TLS-terminating proxy, use the Forwarded Headers Middleware so that `HttpRequest.Scheme` is `https`)
+2. The scheme must match the request's scheme, which blocks downgrades like `https` to `http` (behind a reverse proxy, use the Forwarded Headers Middleware so that `HttpRequest.Scheme` and `HttpRequest.Host` reflect what the browser used)
 3. The hostname must be either the root domain (when `LoginUrl` contains the `{tenant_name}` placeholder) or the request's host
 4. When application-level authorization requests are enabled and `LoginUrl` contains the `{tenant_name}` placeholder, a return URL on the bare root domain is rewritten to the tenant's subdomain (e.g. `yourapp.com` to `acme.yourapp.com`)
 

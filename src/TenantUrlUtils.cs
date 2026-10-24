@@ -104,6 +104,12 @@ internal static class TenantUrlUtils
             return null;
         }
 
+        // Without a host, the request origin cannot be established safely.
+        if (string.IsNullOrEmpty(requestHost))
+        {
+            return null;
+        }
+
         // Normalize the URL the same way a browser would before redirecting to it, so that tricks like "/\evil.com"
         // or "/\t/evil.com" are checked against the real redirect target.
         var normalizedUrl = NormalizeUrlLikeBrowser(returnUrl);

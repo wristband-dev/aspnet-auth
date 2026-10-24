@@ -73,6 +73,12 @@ public class TenantUrlUtilsTests
     }
 
     [Fact]
+    public void ValidateReturnUrl_WithoutRequestHost_ReturnsNull()
+    {
+        Assert.Null(TenantUrlUtils.ValidateReturnUrl("/settings", "https", string.Empty, TenantName, true, RootDomain));
+    }
+
+    [Fact]
     public void ValidateReturnUrl_WithoutTenantName_ThrowsArgumentException()
     {
         Assert.Throws<ArgumentException>(() => TenantUrlUtils.ValidateReturnUrl("/settings", "https", TenantHost, string.Empty, true, RootDomain));

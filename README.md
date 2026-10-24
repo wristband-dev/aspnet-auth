@@ -1131,7 +1131,8 @@ The return URL is stored in the Login State Cookie, and it is available to you i
 To prevent open redirects, `Callback()` validates the return URL before including it in the callback data. A return URL that fails validation is left out of the callback data, and the flow continues without it:
 
 - Relative paths (e.g. `/settings`) resolve against the current request's host.
-- The scheme must match the request's scheme, which blocks downgrades like `https` to `http`. Behind a reverse proxy that terminates TLS, use the ASP.NET Core Forwarded Headers Middleware so that `HttpRequest.Scheme` reflects the original `https` scheme.
+- The scheme must match the request's scheme, which blocks downgrades like `https` to `http`.
+- Behind a reverse proxy, use the ASP.NET Core Forwarded Headers Middleware so that `HttpRequest.Scheme` and `HttpRequest.Host` reflect the scheme and host the browser used. The middleware only applies `X-Forwarded-Proto` and `X-Forwarded-Host` from proxies you trust. The SDK also uses `HttpRequest.Host` to parse tenant subdomains.
 - The hostname must be either your application's root domain (when `LoginUrl` contains the `{tenant_name}` placeholder) or the request's host.
 - When `ApplicationAuthorizationRequestsEnabled` is `true` and `LoginUrl` contains the `{tenant_name}` placeholder, a return URL on the bare root domain is rewritten to the tenant's subdomain (e.g. `yourapp.io` to `acme.yourapp.io`).
 

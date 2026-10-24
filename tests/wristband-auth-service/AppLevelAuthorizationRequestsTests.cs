@@ -83,6 +83,20 @@ public class AppLevelAuthorizationRequestsTests
         Assert.Contains($"domain=.{RootDomain}", cookie, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("devs4you.business.invotastic.com:6001", "https://devs4you-auth.example.com/api/v1/oauth2/authorize?")]
+    [InlineData("[::1]:6001", "https://auth.example.com/api/v1/oauth2/authorize?")]
+    [InlineData("business.invotastic.com:6001", "https://auth.example.com/api/v1/oauth2/authorize?")]
+    public async Task Login_ParsesTenantSubdomainFromHostWithoutPort(string host, string expectedPrefix)
+    {
+        var service = CreateService();
+        var httpContext = TestUtils.setupHttpContext(host);
+
+        var authorizeUrl = await service.Login(httpContext, new LoginConfig());
+
+        Assert.StartsWith(expectedPrefix, authorizeUrl);
+    }
+
     [Fact]
     public async Task Login_WhenDisabled_UsesHostOnlyCookieAndAppLoginPage()
     {
