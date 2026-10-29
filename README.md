@@ -10,7 +10,8 @@
   <p align="center">
     <b>
       <a href="https://wristband.dev">Website</a> • 
-      <a href="https://docs.wristband.dev/">Documentation</a>
+      <a href="https://docs.wristband.dev/">Documentation</a> • 
+      <a href="https://docs.wristband.dev/llms.txt">LLMs.txt</a>
     </b>
   </p>
 </div>
@@ -194,6 +195,10 @@ app.Run();
 > **⚠️ Security Note:**
 >
 > The example above shows values inline for simplicity. In real applications, load secrets from environment variables, configuration files, or a secure secrets management system. Never commit secrets to source control.
+
+> **💡 Disabling Secure Cookies in Local Development**
+>
+> By default, the SDK creates secure cookies (for tracking login state), meaning they are only sent over HTTPS connections. Most browsers make an exception for localhost and allow secure cookies to be sent over HTTP (e.g., http://localhost). However, some browsers, such as Safari, enforce stricter rules and never send secure cookies over HTTP, even for localhost. If you need to disable the secure cookies for local development, set `options.DangerouslyDisableSecureCookies = true`. However, be sure to **re-enable secure cookies before deploying to production**.
 
 <br>
 
@@ -773,7 +778,7 @@ builder.Services.AddWristbandAuth(options =>
 | ClientId | string | Yes | No | The ID of the Wristband client. |
 | ClientSecret | string | Yes | No | The client's secret. |
 | CustomApplicationLoginPageUrl | string | No | Yes | Custom Application-Level Login Page URL (i.e. Tenant Discovery Page URL). This value only needs to be provided if you are self-hosting the application login page. By default, the SDK will use your Wristband-hosted Application-Level Login page URL. If this value is provided, the SDK will redirect to this URL in certain cases where it cannot resolve a proper Tenant-Level Login URL. Only used when `ApplicationAuthorizationRequestsEnabled` is set to `false`. |
-| DangerouslyDisableSecureCookies | boolean | No | No | USE WITH CAUTION: If set to `true`, the "Secure" attribute will not be included in any cookie settings. This should only be done when testing in local development environments that don't have HTTPS enabed.  If not provided, this value defaults to `false`. |
+| DangerouslyDisableSecureCookies | boolean | No | No | USE WITH CAUTION: If set to `true`, the "Secure" attribute will not be included in any cookie settings. This should only be done when testing in local development environments that don't have HTTPS enabled.  If not provided, this value defaults to `false`. |
 | IsApplicationCustomDomainActive | boolean | No | Yes | Indicates whether your Wristband application is configured with an application-level custom domain that is active. This tells the SDK which URL format to use when constructing the Wristband Authorize Endpoint URL. This has no effect on any tenant custom domains passed to your Login Endpoint either via the `tenant_custom_domain` query parameter or via the `DefaultTenantCustomDomain` config.  Defaults to `false`. |
 | LoginStateSecret | string | No | No | A 32 character (or longer) secret used for encryption and decryption of login state cookies. If not provided, it will default to using the client secret. For enhanced security, it is recommended to provide a value that is unique from the client secret. You can run `openssl rand -base64 32` to create a secret from your CLI. |
 | LoginUrl | string | Only when `AutoConfigureEnabled` is set to `false` | Yes | The URL of your application's login endpoint.  This is the endpoint within your application that redirects to Wristband to initialize the login flow. If you intend to use tenant subdomains in your Login Endpoint URL, then this value must contain the `{tenant_name}` placeholder exactly once, as the leftmost part of the hostname. For example: `https://{tenant_name}.yourapp.com/auth/login`. The SDK uses this value to determine your application's root domain for parsing tenant subdomains (e.g. `yourapp.com`), and to determine a non-tenant-specific Login Endpoint URL by removing the `{tenant_name}` subdomain (e.g. `https://yourapp.com/auth/login`). |
@@ -1167,7 +1172,7 @@ It will also pass the state parameter that was generated during the Login Endpoi
 GET https://customer01.yourapp.io/auth/callback?state=f983yr893hf89ewn0idjw8e9f&code=shcsh90jf9wc09j9w0jewc
 ```
 
-The SDK will validate that the incoming state matches the Login State Cookie, and then it will call the Wristband Token Endpoint to exchange the authorizaiton code for JWTs. Lastly, it will call the Wristband Userinfo Endpoint to get any user data as specified by the `scopes` in your SDK configuration.
+The SDK will validate that the incoming state matches the Login State Cookie, and then it will call the Wristband Token Endpoint to exchange the authorization code for JWTs. Lastly, it will call the Wristband Userinfo Endpoint to get any user data as specified by the `scopes` in your SDK configuration.
 
 The return type of the callback method is a `CallbackResult` object containing the result of what happened during callback execution as well as any accompanying data.
 
