@@ -42,10 +42,10 @@ internal class LoginStateHandler : ILoginStateHandler
     /// Implements <see cref="ILoginStateHandler.CreateLoginStateCookie"/>.
     /// </summary>
     /// <inheritdoc />
-    public void CreateLoginStateCookie(HttpContext httpContext, LoginState loginState, string loginStateSecret, bool dangerouslyDisableSecureCookies)
+    public void CreateLoginStateCookie(HttpContext httpContext, LoginState loginState, string loginStateSecret, bool dangerouslyDisableSecureCookies, string? cookieDomain)
     {
         // Clear any stale login state cookies and add a new one for the current request.
-        ClearOldestLoginStateCookies(httpContext, dangerouslyDisableSecureCookies);
+        ClearOldestLoginStateCookies(httpContext, dangerouslyDisableSecureCookies, cookieDomain);
 
         // Encrypt the contents of the login state so it's not accessible in the browser.
         var encryptedLoginState = EncryptLoginState(loginState, loginStateSecret);
@@ -53,6 +53,7 @@ internal class LoginStateHandler : ILoginStateHandler
         // Add the new login state cookie (1 hour max age).
         var cookieOptions = new CookieOptions
         {
+            Domain = cookieDomain,
             HttpOnly = true,
             MaxAge = TimeSpan.FromHours(1),
             Path = "/",
@@ -67,7 +68,7 @@ internal class LoginStateHandler : ILoginStateHandler
     /// Implements <see cref="ILoginStateHandler.GetAndClearLoginStateCookie"/>.
     /// </summary>
     /// <inheritdoc />
-    public string GetAndClearLoginStateCookie(HttpContext httpContext, bool dangerouslyDisableSecureCookies)
+    public string GetAndClearLoginStateCookie(HttpContext httpContext, bool dangerouslyDisableSecureCookies, string? cookieDomain)
     {
         // A login cookie is used to store the challenge code while the login process
         // is happening. Once the login process is complete, the cookie is no longer needed.
@@ -96,6 +97,7 @@ internal class LoginStateHandler : ILoginStateHandler
             // httpContext.Response.Cookies.Delete(cookie.Key);
             httpContext.Response.Cookies.Append(cookie.Key, string.Empty, new CookieOptions
             {
+                Domain = cookieDomain,
                 MaxAge = TimeSpan.Zero,
                 Path = "/",
                 SameSite = SameSiteMode.Lax,
@@ -167,7 +169,7 @@ internal class LoginStateHandler : ILoginStateHandler
         return base64.Replace('+', '-').Replace('/', '_').TrimEnd('=');
     }
 
-    private void ClearOldestLoginStateCookies(HttpContext httpContext, bool dangerouslyDisableSecureCookies)
+    private void ClearOldestLoginStateCookies(HttpContext httpContext, bool dangerouslyDisableSecureCookies, string? cookieDomain)
     {
         // A login cookie is used to store the challenge code while the login process
         // is happening. Once the login process is complete, the cookie is no longer needed.
@@ -195,6 +197,7 @@ internal class LoginStateHandler : ILoginStateHandler
         {
             httpContext.Response.Cookies.Append(orderedLoginCookies[i].Key, string.Empty, new CookieOptions
             {
+                Domain = cookieDomain,
                 MaxAge = TimeSpan.Zero,
                 Path = "/",
                 SameSite = SameSiteMode.Lax,

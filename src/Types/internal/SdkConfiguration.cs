@@ -16,12 +16,26 @@ internal class SdkConfiguration
     }
 
     /// <summary>
+    /// Gets or sets a value indicating whether application-level authorization requests are enabled for your Wristband
+    /// application. Defaults to true when the SDK Configuration Endpoint does not return it.
+    /// </summary>
+    [JsonPropertyName("applicationAuthorizationRequestsEnabled")]
+    public bool ApplicationAuthorizationRequestsEnabled { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the custom Application-Level Login Page URL (i.e. Tenant Discovery Page URL).
     /// This value is only needed if you are self-hosting the application login page.
     /// When null, the SDK will use your Wristband-hosted Application-Level Login page URL.
     /// </summary>
     [JsonPropertyName("customApplicationLoginPageUrl")]
     public string? CustomApplicationLoginPageUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the login URL without the `{tenant_name}` subdomain, used when a tenant cannot be resolved and
+    /// application-level authorization requests are enabled.
+    /// </summary>
+    [JsonPropertyName("fallbackLoginUrl")]
+    public string? FallbackLoginUrl { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether gets or sets whether your Wristband application is configured with an

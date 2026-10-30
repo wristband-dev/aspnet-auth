@@ -25,6 +25,7 @@ public class LoginTests
             RedirectUri = "https://app.example.com/callback",
             WristbandApplicationVanityDomain = "wristband.example.com",
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
@@ -52,6 +53,7 @@ public class LoginTests
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             IsApplicationCustomDomainActive = false,
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
@@ -75,6 +77,7 @@ public class LoginTests
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             CustomApplicationLoginPageUrl = "https://custom.example.com/login",
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var httpContext = TestUtils.setupHttpContext("app.example.com");
@@ -95,7 +98,6 @@ public class LoginTests
             LoginUrl = "https://{tenant_name}.example.com/login",
             RedirectUri = "https://{tenant_name}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
@@ -121,7 +123,6 @@ public class LoginTests
             LoginUrl = "https://{tenant_name}.example.com/login",
             RedirectUri = "https://{tenant_name}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
@@ -149,6 +150,7 @@ public class LoginTests
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             IsApplicationCustomDomainActive = false,
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var tenantName = "mytenant";
@@ -200,6 +202,7 @@ public class LoginTests
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             IsApplicationCustomDomainActive = true,
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var tenantName = "tenant1";
@@ -430,6 +433,7 @@ public class LoginTests
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             IsApplicationCustomDomainActive = false,
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var returnUrl = "/dashboard";
@@ -453,6 +457,7 @@ public class LoginTests
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
             CustomApplicationLoginPageUrl = "https://custom.example.com/login",
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
         var returnUrl = "/profile";
@@ -462,59 +467,6 @@ public class LoginTests
         Assert.Equal($"https://custom.example.com/login?client_id={config.ClientId}&state={Uri.EscapeDataString(returnUrl)}", result);
     }
 
-    ////////////////////////////////////////////////////////
-    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
-    ////////////////////////////////////////////////////////
-
-    [Fact]
-    public async Task Login_WithTenantDomainToken_BackwardsCompat()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = _defaultConfig.ClientId,
-            ClientSecret = _defaultConfig.ClientSecret,
-            LoginStateSecret = _defaultConfig.LoginStateSecret,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
-            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
-            AutoConfigureEnabled = false,
-        };
-        var service = SetupWristbandAuthService(config);
-
-        var httpContext = TestUtils.setupHttpContext("tenant1.example.com");
-
-        var result = await service.Login(httpContext, null);
-
-        Assert.Contains("tenant1", result);
-        Assert.StartsWith("https://tenant1", result);
-    }
-
-    [Fact]
-    public async Task Login_WithTenantCustomDomainUsingTenantDomainToken_BackwardsCompat()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = _defaultConfig.ClientId,
-            ClientSecret = _defaultConfig.ClientSecret,
-            LoginStateSecret = _defaultConfig.LoginStateSecret,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
-            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
-            AutoConfigureEnabled = false,
-        };
-        var service = SetupWristbandAuthService(config);
-        var customDomain = "tenant.custom.com";
-
-        var httpContext = TestUtils.setupHttpContext(
-            "tenant1.example.com",
-            $"tenant_custom_domain={customDomain}");
-
-        var result = await service.Login(httpContext, null);
-
-        Assert.StartsWith($"https://{customDomain}/api/v1/oauth2/authorize?", result);
-    }
 
     ////////////////////////////////////////////////////////
     /// HELPERS
@@ -557,7 +509,6 @@ public class LoginTests
             LoginUrl = "https://{tenant_name}.example.com/login",
             RedirectUri = "https://{tenant_name}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);

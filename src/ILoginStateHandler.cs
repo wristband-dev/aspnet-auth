@@ -24,7 +24,8 @@ internal interface ILoginStateHandler
     /// <param name="loginState">Represents all possible state information for the current login request, which is stored in the login state cookie.</param>
     /// <param name="loginStateSecret">A secret (32 or more characters in length) used for encryption and decryption of login state cookies.</param>
     /// <param name="dangerouslyDisableSecureCookies">If set to true, the "Secure" attribute will not be included in any cookie settings. Should be used only in local development.</param>
-    void CreateLoginStateCookie(HttpContext httpContext, LoginState loginState, string loginStateSecret, bool dangerouslyDisableSecureCookies);
+    /// <param name="cookieDomain">The domain to set the cookie on, or null for a host-only cookie. The root domain is used when application-level authorization requests are enabled and tenant subdomains are in use.</param>
+    void CreateLoginStateCookie(HttpContext httpContext, LoginState loginState, string loginStateSecret, bool dangerouslyDisableSecureCookies, string? cookieDomain);
 
     /// <summary>
     /// Attempts to fetch and clear the login state cookie for the current login request.
@@ -32,7 +33,8 @@ internal interface ILoginStateHandler
     /// <param name="httpContext">The HTTP context for the request, containing details about the login request.</param>
     /// <param name="dangerouslyDisableSecureCookies">If set to true, the "Secure" attribute will not be included in any cookie settings. Should be used only in local development.</param>
     /// <returns>The login state cookie, if found. Otherwise, and empty string.</returns>
-    string GetAndClearLoginStateCookie(HttpContext httpContext, bool dangerouslyDisableSecureCookies);
+    /// <param name="cookieDomain">The domain to set the cookie on, or null for a host-only cookie. The root domain is used when application-level authorization requests are enabled and tenant subdomains are in use.</param>
+    string GetAndClearLoginStateCookie(HttpContext httpContext, bool dangerouslyDisableSecureCookies, string? cookieDomain);
 
     /// <summary>
     /// Decrypts the encrypted value of the login state cookie that was created for the current login request.
