@@ -22,7 +22,7 @@ This SDK facilitates seamless interaction with Wristband for user authentication
 
 You can learn more about how authentication works in Wristband in our documentation:
 
-- [Auth Flows Walkthrough](https://docs.wristband.dev/docs/auth-flows-and-diagrams)
+- [How User Authentication Works](https://docs.wristband.dev/docs/user-authentication)
 - [Login Workflow In Depth](https://docs.wristband.dev/docs/login-workflow)
 
 ## Questions
