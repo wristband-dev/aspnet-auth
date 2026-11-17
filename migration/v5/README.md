@@ -38,6 +38,7 @@
 - [ParseTenantFromRootDomain Config Removed](#parsetenantfromrootdomain-config-removed)
 - [Return URL Validation in Callback()](#return-url-validation-in-callback)
 - [Login State Cookie Changes](#login-state-cookie-changes)
+- [Zero JWT Clock Skew](#zero-jwt-clock-skew)
 
 <br>
 
@@ -181,6 +182,14 @@ No code or config changes are needed for the following:
 > **⚠️ Important:**
 >
 > If your Callback Endpoint already handles the `RedirectRequired` result type, no change is needed.
+
+<br>
+
+## Zero JWT Clock Skew
+
+The `WristbandJwt` policy, and the JWT strategy of multi-strategy policies, now reject Bearer tokens as soon as they expire. In 4.x, they were accepted for up to 5 minutes after their `exp` claim, which is the .NET default clock skew. This matches the Wristband JWT SDKs for other languages.
+
+No code or config changes are needed. If your clients only refresh their access tokens after a request fails, they will now see a `401 Unauthorized` up to 5 minutes sooner.
 
 <br>
 
