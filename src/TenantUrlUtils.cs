@@ -17,7 +17,37 @@ internal static class TenantUrlUtils
     /// </summary>
     public const string TenantPlaceholderMessage = "\"{tenant_name}\" placeholder";
 
+    // One DNS label: letters, digits, and inner hyphens, up to 63 characters. A-Z is listed explicitly instead of
+    // using RegexOptions.IgnoreCase, which can let some non-ASCII letters (e.g. the Kelvin sign) match [a-z].
+    private const string DnsLabelPattern = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
+
     private static readonly Regex LeadingTenantPlaceholderRegex = new(@"^https?://\{tenant_name\}\.", RegexOptions.Compiled);
+
+    // Both patterns end with \z instead of $, since $ also matches before a trailing newline.
+    private static readonly Regex TenantNameRegex = new($@"^{DnsLabelPattern}\z", RegexOptions.Compiled);
+    private static readonly Regex DomainNameRegex = new($@"^(?:{DnsLabelPattern}\.)+{DnsLabelPattern}\z", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Returns the tenant name if it is a single DNS label, otherwise an empty string. Tenant names are used to build
+    /// Wristband URL hosts, so anything else (e.g. "evil.com#") could redirect users off Wristband.
+    /// </summary>
+    /// <param name="value">The tenant name to check.</param>
+    /// <returns>The tenant name, or an empty string when it isn't a valid DNS label.</returns>
+    public static string ToSafeTenantName(string? value)
+    {
+        return !string.IsNullOrEmpty(value) && TenantNameRegex.IsMatch(value) ? value : string.Empty;
+    }
+
+    /// <summary>
+    /// Returns the domain if it is a valid DNS hostname (two or more labels, no port, path, or credentials), otherwise
+    /// an empty string.
+    /// </summary>
+    /// <param name="value">The domain name to check.</param>
+    /// <returns>The domain name, or an empty string when it isn't a valid DNS hostname.</returns>
+    public static string ToSafeDomainName(string? value)
+    {
+        return !string.IsNullOrEmpty(value) && DomainNameRegex.IsMatch(value) ? value : string.Empty;
+    }
 
     /// <summary>
     /// Derives the fallback login URL from a login URL that uses the {tenant_name} placeholder. The placeholder must be

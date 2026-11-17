@@ -592,6 +592,125 @@ public class LoginTests
         _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
     }
 
+    // An invalid tenant name could otherwise redirect users off Wristband, e.g. evil.com# makes the browser go to
+    // https://evil.com#-wristband.example.com/... instead.
+    [Theory]
+    [InlineData("evil.com%23")]
+    [InlineData("evil.com")]
+    [InlineData("tenant%2Fpath")]
+    [InlineData("-tenant")]
+    [InlineData("tenant-")]
+    [InlineData("customer01%0A")]
+    [InlineData("%E2%84%AA")]
+    public async Task Login_WithInvalidTenantNameParam_IgnoresTenantName(string tenantNameParam)
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantNameParam}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantNameParam_FallsThroughToDefaultTenantName()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=evil.com%23");
+
+        var result = await service.Login(httpContext, new LoginConfig { DefaultTenantName = "default-tenant" });
+
+        Assert.StartsWith($"https://default-tenant-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    [Fact]
+    public async Task Login_WithTenantNameAt63Characters_UsesTenantName()
+    {
+        var tenantName = new string('a', 63);
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantName}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith($"https://{tenantName}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    [Fact]
+    public async Task Login_WithTenantNameOver63Characters_IgnoresTenantName()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={new string('a', 64)}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantSubdomain_IgnoresTenantName()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+        var httpContext = TestUtils.setupHttpContext("bad_tenant.example.com");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Theory]
+    [InlineData("evil.com#")]
+    [InlineData("tenant.example.com/path")]
+    [InlineData("tenant.example.com:8443")]
+    [InlineData("user@tenant.example.com")]
+    public async Task Login_WithInvalidDefaultTenantCustomDomain_FallsThroughToDefaultTenantName(string defaultTenantCustomDomain)
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+        var loginConfig = new LoginConfig
+        {
+            DefaultTenantCustomDomain = defaultTenantCustomDomain,
+            DefaultTenantName = "default-tenant",
+        };
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        Assert.StartsWith($"https://default-tenant-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidDefaultTenantName_IgnoresDefaultTenantName()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+
+        var result = await service.Login(httpContext, new LoginConfig { DefaultTenantName = "evil.com#" });
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantCustomDomainParam_SkipsValidationApiCall()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_custom_domain=evil.com%23&tenant_name=tenant1");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith($"https://tenant1-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+        _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
+    }
+
     private WristbandAuthService SetupWristbandAuthService(WristbandAuthConfig authConfig)
     {
         var wristbandAuthService = new WristbandAuthService(authConfig);

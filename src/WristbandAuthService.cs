@@ -91,8 +91,8 @@ public class WristbandAuthService : IWristbandAuthService
         // falls through to the next domain in the precedence order below.
         var tenantCustomDomain = await ResolveValidTenantCustomDomainParam(context);
         var tenantName = ResolveTenantName(context, parseTenantFromRootDomain);
-        var defaultTenantCustomDomain = loginConfig.DefaultTenantCustomDomain ?? string.Empty;
-        var defaultTenantName = loginConfig.DefaultTenantName ?? string.Empty;
+        var defaultTenantCustomDomain = TenantUrlUtils.ToSafeDomainName(loginConfig.DefaultTenantCustomDomain);
+        var defaultTenantName = TenantUrlUtils.ToSafeTenantName(loginConfig.DefaultTenantName);
 
         var resolvedReturnUrl = ResolveReturnUrl(context, loginConfig.ReturnUrl);
         var isTenantUnresolved = string.IsNullOrEmpty(tenantCustomDomain) &&
@@ -398,17 +398,20 @@ public class WristbandAuthService : IWristbandAuthService
         var logoutPath = $"/api/v1/logout?client_id={clientId}{redirectUrl}{state}";
         string separator = isApplicationCustomDomainActive ? "." : "-";
 
+        var configTenantCustomDomain = TenantUrlUtils.ToSafeDomainName(logoutConfig.TenantCustomDomain);
+        var configTenantName = TenantUrlUtils.ToSafeTenantName(logoutConfig.TenantName);
+
         // Domain priority order resolution:
         // 1) If the LogoutConfig has a tenant custom domain explicitly defined, use that.
-        if (!string.IsNullOrWhiteSpace(logoutConfig.TenantCustomDomain))
+        if (!string.IsNullOrEmpty(configTenantCustomDomain))
         {
-            return $"https://{logoutConfig.TenantCustomDomain}{logoutPath}";
+            return $"https://{configTenantCustomDomain}{logoutPath}";
         }
 
         // 2) If the LogoutConfig has a tenant name defined, then use that.
-        if (!string.IsNullOrWhiteSpace(logoutConfig.TenantName))
+        if (!string.IsNullOrEmpty(configTenantName))
         {
-            return $"https://{logoutConfig.TenantName}{separator}{wristbandApplicationVanityDomain}{logoutPath}";
+            return $"https://{configTenantName}{separator}{wristbandApplicationVanityDomain}{logoutPath}";
         }
 
         // 3) If the tenant_custom_domain query param exists, then use that.
@@ -547,7 +550,8 @@ public class WristbandAuthService : IWristbandAuthService
         {
             // HostString.Host is the hostname without the port (IPv6 literals stay bracketed). Behind a reverse proxy,
             // the Forwarded Headers Middleware sets it from X-Forwarded-Host for trusted proxies only.
-            return ParseTenantSubdomain(context.Request.Host.Host ?? string.Empty, parseTenantFromRootDomain);
+            return TenantUrlUtils.ToSafeTenantName(
+                ParseTenantSubdomain(context.Request.Host.Host ?? string.Empty, parseTenantFromRootDomain));
         }
 
         var tenantNameParam = context.Request.Query["tenant_name"].FirstOrDefault();
@@ -557,8 +561,8 @@ public class WristbandAuthService : IWristbandAuthService
             throw new ArgumentException("More than one [tenant_name] query parameter was encountered");
         }
 
-        // Return the tenant name if it exists, otherwise return an empty string
-        return tenantNameParam ?? string.Empty;
+        // Return the tenant name if it is a valid DNS label, otherwise return an empty string
+        return TenantUrlUtils.ToSafeTenantName(tenantNameParam);
     }
 
     private static string ResolveTenantCustomDomainParam(HttpContext context)
@@ -614,16 +618,18 @@ public class WristbandAuthService : IWristbandAuthService
     /// and falls through to the next domain in its resolution precedence order.
     /// </summary>
     /// <remarks>
-    /// Validation only applies to domains supplied via the tenant_custom_domain query parameter, which
-    /// is attacker-controllable. Domains set directly in configuration by the developer are trusted and
-    /// are not validated.
+    /// The Validate Custom Domain API check only applies to domains supplied via the tenant_custom_domain
+    /// query parameter, which is attacker-controllable. Domains set directly in configuration by the
+    /// developer are only format-checked.
     /// </remarks>
     /// <param name="context">The current HTTP context.</param>
     /// <returns>A task that represents the asynchronous operation and contains the validated domain, or an empty string.</returns>
     private async Task<string> ResolveValidTenantCustomDomainParam(HttpContext context)
     {
         var tenantCustomDomainParam = ResolveTenantCustomDomainParam(context);
-        if (string.IsNullOrEmpty(tenantCustomDomainParam))
+
+        // Skip the API call for anything that isn't a valid domain name.
+        if (string.IsNullOrEmpty(TenantUrlUtils.ToSafeDomainName(tenantCustomDomainParam)))
         {
             return string.Empty;
         }

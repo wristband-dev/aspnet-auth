@@ -174,6 +174,18 @@ public class CallbackTests
     }
 
     [Fact]
+    public async Task Callback_WithInvalidTenantName_ThrowsMissingTenantNameError()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "state=teststate&code=testcode&tenant_name=evil.com%23");
+
+        SetupLoginStateMock("teststate", "verifier123");
+
+        var ex = await Assert.ThrowsAsync<WristbandError>(() => service.Callback(httpContext));
+        Assert.Equal("missing_tenant_name", ex.Error);
+    }
+
+    [Fact]
     public async Task Callback_WithMissingTenantName_ThrowsWristbandError()
     {
         var service = SetupWristbandAuthService(_defaultConfig);

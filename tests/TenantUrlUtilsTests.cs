@@ -40,6 +40,50 @@ public class TenantUrlUtilsTests
     }
 
     [Theory]
+    [InlineData("acme", "acme")]
+    [InlineData("ACME-01", "ACME-01")]
+    [InlineData("a", "a")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "")]
+    [InlineData("evil.com#", "")]
+    [InlineData("evil.com", "")]
+    [InlineData("-acme", "")]
+    [InlineData("acme-", "")]
+    [InlineData("ac_me", "")]
+    [InlineData("acme\n", "")]
+    [InlineData("customer01\n", "")]
+    [InlineData("\u212A", "")]
+    [InlineData(" acme", "")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    public void ToSafeTenantName_AllowsOnlyASingleDnsLabel(string? value, string expected)
+    {
+        Assert.Equal(expected, TenantUrlUtils.ToSafeTenantName(value));
+    }
+
+    [Theory]
+    [InlineData("auth.acme.com", "auth.acme.com")]
+    [InlineData("Auth.ACME.com", "Auth.ACME.com")]
+    [InlineData("a.b", "a.b")]
+    [InlineData("acme", "")]
+    [InlineData("evil.com#", "")]
+    [InlineData("acme.com.", "")]
+    [InlineData(".acme.com", "")]
+    [InlineData("acme..com", "")]
+    [InlineData("acme.com:8443", "")]
+    [InlineData("acme.com/path", "")]
+    [InlineData("user@acme.com", "")]
+    [InlineData("-acme.com", "")]
+    [InlineData("acme.com\n", "")]
+    [InlineData("acme.\u212A.com", "")]
+    [InlineData("", "")]
+    [InlineData(null, "")]
+    public void ToSafeDomainName_AllowsOnlyValidDnsHostnames(string? value, string expected)
+    {
+        Assert.Equal(expected, TenantUrlUtils.ToSafeDomainName(value));
+    }
+
+    [Theory]
     [InlineData(null, "https", TenantHost, true, RootDomain, null)]
     [InlineData("", "https", TenantHost, true, RootDomain, null)]
     [InlineData("/settings?tab=1#top", "https", TenantHost, true, RootDomain, "/settings?tab=1#top")]
