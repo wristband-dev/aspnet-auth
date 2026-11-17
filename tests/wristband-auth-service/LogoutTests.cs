@@ -245,7 +245,25 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com", logoutUrl);
+            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https%3A%2F%2Fpost-logout.com", logoutUrl);
+        }
+
+        // A redirect URL with its own query string would otherwise add parameters to the Wristband Logout URL.
+        [Fact]
+        public async Task Logout_Should_UrlEncodeRedirectUrlParam_WhenRedirectUrlHasQueryString()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com", "tenant_name=test-tenant");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                RedirectUrl = "https://post-logout.com/bye?from=app&client_id=other"
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Equal(
+                "https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https%3A%2F%2Fpost-logout.com%2Fbye%3Ffrom%3Dapp%26client_id%3Dother",
+                logoutUrl);
         }
 
         // Test refresh token revocation scenarios
@@ -385,7 +403,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com&state=custom-state", logoutUrl);
+            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https%3A%2F%2Fpost-logout.com&state=custom-state", logoutUrl);
         }
 
 

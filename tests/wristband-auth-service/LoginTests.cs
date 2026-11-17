@@ -351,43 +351,64 @@ public class LoginTests
         Assert.Contains("More than one [return_url] query parameter was encountered", ex.Message);
     }
 
+    // The return URL is kept in the Login State Cookie at any length.
     [Fact]
-    public async Task Login_WithReturnUrlTooLong_StillGeneratesUrl()
+    public async Task Login_WithReturnUrlOver512Chars_KeepsReturnUrlInLoginState()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        // Create a return URL longer than 450 characters
-        var longReturnUrl = "/dashboard/" + new string('a', 450);
+        var longReturnUrl = "/dashboard/" + new string('a', 600);
         var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url={longReturnUrl}");
 
-        // Suppress console output during test
-        var originalOut = Console.Out;
-        try
-        {
-            Console.SetOut(TextWriter.Null);
-            var result = await service.Login(httpContext, null);
+        var result = await service.Login(httpContext, null);
 
-            // Should still generate URL successfully (return URL is ignored internally)
-            Assert.StartsWith("https://tenant1-", result);
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
+        Assert.StartsWith("https://tenant1-", result);
+        var cookie = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie").Single(c => c.StartsWith("login#"));
+        var cookieValue = HttpUtility.UrlDecode(cookie.Split(";")[0].Split("=", 2)[1]);
+        var loginState = new LoginStateHandler().DecryptLoginState(cookieValue, _defaultConfig.LoginStateSecret!);
+        Assert.Equal(longReturnUrl, loginState.ReturnUrl);
     }
 
     [Fact]
-    public async Task Login_WithReturnUrlExactly450Chars_GeneratesUrl()
+    public async Task Login_WithReturnUrlOf512Chars_AddsStateToAppLevelLoginUrl()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        // Create a return URL exactly 450 characters
-        var returnUrl = "/dashboard/" + new string('a', 439);
-        Assert.Equal(450, returnUrl.Length);
+        var returnUrl = "/dashboard/" + new string('a', 501);
+        Assert.Equal(512, returnUrl.Length);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"return_url={returnUrl}");
 
-        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url={returnUrl}");
         var result = await service.Login(httpContext, null);
 
-        // Should generate URL successfully
-        Assert.StartsWith("https://tenant1-", result);
+        var expectedUrl = $"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}&state={Uri.EscapeDataString(returnUrl)}";
+        Assert.Equal(expectedUrl, result);
+    }
+
+    // Wristband limits the state query parameter to 512 characters, so a longer return URL is left out.
+    [Fact]
+    public async Task Login_WithReturnUrlOver512Chars_LeavesStateOutOfAppLevelLoginUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var returnUrl = "/dashboard/" + new string('a', 502);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"return_url={returnUrl}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    // The raw value is checked, not the URL-encoded one, since Wristband validates the decoded state value.
+    [Fact]
+    public async Task Login_WithReturnUrlUnder512CharsThatEncodesLonger_AddsStateToAppLevelLoginUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var returnUrl = "/search?q=" + string.Concat(Enumerable.Repeat("a b", 160));
+        Assert.True(returnUrl.Length <= 512);
+        Assert.True(Uri.EscapeDataString(returnUrl).Length > 512);
+        var loginConfig = new LoginConfig { ReturnUrl = returnUrl };
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        Assert.EndsWith($"&state={Uri.EscapeDataString(returnUrl)}", result);
     }
 
     [Fact]
