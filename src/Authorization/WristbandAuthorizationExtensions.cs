@@ -24,7 +24,13 @@ public static class WristbandAuthorizationExtensions
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddWristbandAuthorizationHandler(this IServiceCollection services)
     {
-        services.TryAddSingleton<IAuthorizationHandler, WristbandAuthHandler>();
+        // TryAddEnumerable(), not TryAddSingleton(), since AddAuthorization() registers its own IAuthorizationHandler.
+        // TryAddSingleton() would skip this handler whenever AddAuthorization() is called first.
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IAuthorizationHandler, WristbandAuthHandler>());
+
+        // The auth handler reads the current request through IHttpContextAccessor, which ASP.NET Core doesn't
+        // register by default. AddHttpContextAccessor() is safe to call more than once.
+        services.AddHttpContextAccessor();
 
         // Added with AddSingleton(), not TryAddSingleton(), so that it replaces the default handler that
         // AddAuthorization() registers, whichever is called first.

@@ -182,6 +182,31 @@ public class WristbandMultiStrategyTests
         Assert.IsType<WristbandAuthorizationMiddlewareResultHandler>(provider.GetRequiredService<IAuthorizationMiddlewareResultHandler>());
     }
 
+    [Fact]
+    public void AddWristbandAuthorizationHandler_AfterAddAuthorization_RegistersTheAuthHandler()
+    {
+        var services = new ServiceCollection();
+        services.AddAuthorization();
+        services.AddWristbandAuthorizationHandler();
+        services.AddSingleton(_mockWristbandAuth.Object);
+        services.AddOptions();
+
+        var provider = services.BuildServiceProvider();
+
+        // Also resolves without the app registering IHttpContextAccessor itself.
+        Assert.Contains(provider.GetServices<IAuthorizationHandler>(), h => h is WristbandAuthHandler);
+    }
+
+    [Fact]
+    public void AddWristbandAuthorizationHandler_CalledTwice_RegistersTheAuthHandlerOnce()
+    {
+        var services = new ServiceCollection();
+        services.AddWristbandAuthorizationHandler();
+        services.AddWristbandAuthorizationHandler();
+
+        Assert.Single(services, d => d.ServiceType == typeof(IAuthorizationHandler) && d.ImplementationType == typeof(WristbandAuthHandler));
+    }
+
     private static AuthStrategy[] ParseStrategies(string strategies)
     {
         return strategies.Split(',').Select(s => s == "SESSION" ? AuthStrategy.Session : AuthStrategy.Jwt).ToArray();
