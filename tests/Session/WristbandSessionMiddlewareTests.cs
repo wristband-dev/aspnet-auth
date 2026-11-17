@@ -76,14 +76,14 @@ public class WristbandSessionMiddlewareTests
     }
 
     [Fact]
-    public void CreateCsrfToken_Returns32CharacterHexString()
+    public void CreateCsrfToken_Returns64CharacterHexString()
     {
         var middleware = CreateMiddleware();
 
         var token = middleware.CreateCsrfToken();
 
-        Assert.Equal(32, token.Length);
-        Assert.Matches("^[a-f0-9]{32}$", token);
+        Assert.Equal(64, token.Length);
+        Assert.Matches("^[a-f0-9]{64}$", token);
     }
 
     [Fact]
@@ -343,7 +343,7 @@ public class WristbandSessionMiddlewareTests
 
         var csrfToken = context.User.FindFirst("csrf_token")?.Value;
         Assert.NotNull(csrfToken);
-        Assert.Equal(32, csrfToken.Length);
+        Assert.Equal(64, csrfToken.Length);
     }
 
     [Fact]
@@ -580,5 +580,61 @@ public class WristbandSessionMiddlewareTests
             It.IsAny<HttpContext>(),
             It.IsAny<string>(),
             It.IsAny<AuthenticationProperties>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CommitSessionAsync_SetsNoCacheHeadersWhenSessionSaved()
+    {
+        var middleware = CreateMiddleware();
+        var context = CreateHttpContext();
+        context.User = new ClaimsPrincipal(new ClaimsIdentity(
+            new[] { new Claim("userId", "user123") }, CookieAuthenticationDefaults.AuthenticationScheme));
+        context.Items["WristbandSessionNeedsSave"] = true;
+
+        await middleware.CommitSessionAsync(context);
+
+        Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
+        Assert.Equal("no-cache", context.Response.Headers["Pragma"].ToString());
+    }
+
+    [Fact]
+    public async Task CommitSessionAsync_SetsNoCacheHeadersWhenSessionDeleted()
+    {
+        var middleware = CreateMiddleware();
+        var context = CreateHttpContext();
+        context.Items["WristbandSessionNeedsDelete"] = true;
+
+        await middleware.CommitSessionAsync(context);
+
+        Assert.Equal("no-store", context.Response.Headers["Cache-Control"].ToString());
+        Assert.Equal("no-cache", context.Response.Headers["Pragma"].ToString());
+    }
+
+    // Logout() already appends these headers, so a response that also destroys the session must not get them twice.
+    [Fact]
+    public async Task CommitSessionAsync_DoesNotDuplicateExistingNoCacheHeaders()
+    {
+        var middleware = CreateMiddleware();
+        var context = CreateHttpContext();
+        context.Response.Headers.Append("Cache-Control", "no-store");
+        context.Response.Headers.Append("Pragma", "no-cache");
+        context.Items["WristbandSessionNeedsDelete"] = true;
+
+        await middleware.CommitSessionAsync(context);
+
+        Assert.Single(context.Response.Headers["Cache-Control"]);
+        Assert.Single(context.Response.Headers["Pragma"]);
+    }
+
+    [Fact]
+    public async Task CommitSessionAsync_DoesNotSetNoCacheHeadersWhenNoFlagsSet()
+    {
+        var middleware = CreateMiddleware();
+        var context = CreateHttpContext();
+
+        await middleware.CommitSessionAsync(context);
+
+        Assert.False(context.Response.Headers.ContainsKey("Cache-Control"));
+        Assert.False(context.Response.Headers.ContainsKey("Pragma"));
     }
 }

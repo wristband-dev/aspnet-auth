@@ -262,6 +262,36 @@ public class WristbandAuthHandlerTests
         Assert.False(result);
     }
 
+    [Theory]
+    [InlineData("session-tok")]
+    [InlineData("session-token-extra")]
+    [InlineData("SESSION-TOKEN")]
+    public async Task TrySessionAuth_FailsWhenCsrfHeaderDiffersFromSessionToken(string headerToken)
+    {
+        var csrfOptions = new WristbandCsrfOptions
+        {
+            EnableCsrfProtection = true,
+            CsrfHeaderName = "X-CSRF-TOKEN"
+        };
+
+        var handler = new WristbandAuthHandler(
+            _mockAuthService.Object,
+            _mockHttpContextAccessor.Object,
+            Options.Create(csrfOptions));
+
+        var claims = new[]
+        {
+            new Claim("userId", "test-user"),
+            new Claim("csrf_token", "session-token")
+        };
+        var httpContext = CreateAuthenticatedHttpContext(CookieAuthenticationDefaults.AuthenticationScheme, true, claims);
+        httpContext.Request.Headers["X-CSRF-TOKEN"] = headerToken;
+
+        var result = await InvokeTrySessionAuth(httpContext, handler);
+
+        Assert.False(result);
+    }
+
     [Fact]
     public async Task TrySessionAuth_FailsWhenCsrfTokenMissing()
     {

@@ -56,16 +56,32 @@ public class WristbandSessionMiddleware
         if (ctx.Items.TryGetValue("WristbandSessionNeedsDelete", out var needsDelete) && needsDelete is true)
         {
             await HandleSessionDeletion(ctx);
+            SetNoCacheHeaders(ctx);
         }
 
         // PRIORITY 2: Save session if modified
         else if (ctx.Items.TryGetValue("WristbandSessionNeedsSave", out var needsSave) && needsSave is true)
         {
             await HandleSessionSave(ctx);
+            SetNoCacheHeaders(ctx);
         }
 
         // PRIORITY 3: Convert 401 to 403 for CSRF failures
         HandleCsrfFailureStatusCode(ctx);
+    }
+
+    /// <summary>
+    /// Prevents caching of a response that saves or destroys the session, since it carries session cookies.
+    /// </summary>
+    /// <remarks>
+    /// The indexer is used instead of Append() so that a response which already has these headers (e.g. from
+    /// Logout()) still ends up with a single value for each.
+    /// </remarks>
+    /// <param name="ctx">The HTTP context for the current request.</param>
+    internal void SetNoCacheHeaders(HttpContext ctx)
+    {
+        ctx.Response.Headers["Cache-Control"] = "no-store";
+        ctx.Response.Headers["Pragma"] = "no-cache";
     }
 
     /// <summary>
@@ -142,10 +158,10 @@ public class WristbandSessionMiddleware
     /// <summary>
     /// Creates a cryptographically secure CSRF token.
     /// </summary>
-    /// <returns>A 32-character hexadecimal string representing the CSRF token.</returns>
+    /// <returns>A 64-character hexadecimal string representing the CSRF token.</returns>
     internal string CreateCsrfToken()
     {
-        var secretBytes = RandomNumberGenerator.GetBytes(16);
+        var secretBytes = RandomNumberGenerator.GetBytes(32);
         return Convert.ToHexString(secretBytes).ToLower();
     }
 

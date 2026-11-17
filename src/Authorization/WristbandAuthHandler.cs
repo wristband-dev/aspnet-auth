@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -103,7 +105,7 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
             var sessionToken = httpContext.User.FindFirst("csrf_token")?.Value;
             var headerToken = httpContext.Request.Headers[_csrfOptions.CsrfHeaderName].ToString();
 
-            if (string.IsNullOrEmpty(sessionToken) || sessionToken != headerToken)
+            if (string.IsNullOrEmpty(sessionToken) || !CsrfTokensMatch(sessionToken, headerToken))
             {
                 return false;
             }
@@ -164,5 +166,19 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
     {
         var authResult = await httpContext.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme);
         return authResult.Succeeded && authResult.Principal != null;
+    }
+
+    /// <summary>
+    /// Compares the session's CSRF token to the request header's in constant time, so that the time taken doesn't
+    /// reveal how much of the header value matched.
+    /// </summary>
+    /// <param name="sessionToken">The CSRF token stored in the session.</param>
+    /// <param name="headerToken">The CSRF token sent in the request header.</param>
+    /// <returns><c>true</c> if the tokens are equal; otherwise, <c>false</c>.</returns>
+    private static bool CsrfTokensMatch(string sessionToken, string headerToken)
+    {
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(sessionToken),
+            Encoding.UTF8.GetBytes(headerToken));
     }
 }
