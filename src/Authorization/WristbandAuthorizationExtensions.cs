@@ -15,11 +15,20 @@ public static class WristbandAuthorizationExtensions
     /// Registers the Wristband authorization handler.
     /// Required for all Wristband authorization policies (session, JWT, and multi-strategy).
     /// </summary>
+    /// <remarks>
+    /// Also registers an <see cref="IAuthorizationMiddlewareResultHandler"/> that responds to a failed Wristband
+    /// policy based on why it failed: 403 for a CSRF failure, otherwise 401. It replaces ASP.NET Core's default
+    /// handler and passes every other authorization result to it unchanged.
+    /// </remarks>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for method chaining.</returns>
     public static IServiceCollection AddWristbandAuthorizationHandler(this IServiceCollection services)
     {
         services.TryAddSingleton<IAuthorizationHandler, WristbandAuthHandler>();
+
+        // Added with AddSingleton(), not TryAddSingleton(), so that it replaces the default handler that
+        // AddAuthorization() registers, whichever is called first.
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, WristbandAuthorizationMiddlewareResultHandler>();
         return services;
     }
 
@@ -97,8 +106,14 @@ public static class WristbandAuthorizationExtensions
     /// Adds a multi-strategy Wristband authorization policy with configurable strategy priority.
     /// Requires calling AddWristbandAuthorizationHandler() to register the authorization handler.
     /// </summary>
+    /// <remarks>
+    /// Strategies are checked in order, and the first one whose credential is in the request decides the result. A
+    /// strategy is skipped only when its credential is missing: no session cookie for SESSION, or no Authorization
+    /// header for JWT. When a credential is present but fails, the request is rejected right away, and later
+    /// strategies aren't tried.
+    /// </remarks>
     /// <param name="options">The authorization options.</param>
-    /// <param name="strategies">Array of auth strategies in priority order (first is tried first).</param>
+    /// <param name="strategies">Array of auth strategies in priority order (first is checked first).</param>
     /// <param name="policyName">Name of the policy (defaults to "WristbandMultiAuth").</param>
     /// <returns>The authorization options for method chaining.</returns>
     public static AuthorizationOptions AddWristbandMultiStrategyPolicy(
