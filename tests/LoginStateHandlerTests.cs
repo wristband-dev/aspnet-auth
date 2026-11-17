@@ -208,7 +208,8 @@ public class LoginStateHandlerTests
     [Fact]
     public void DecryptLoginState_WithInvalidEncryptedStateFormat_ThrowsArgumentException()
     {
-        var invalidEncryptedState = "invalidFormatWithoutPipe";
+        // Shorter than the nonce and auth tag.
+        var invalidEncryptedState = Convert.ToBase64String(new byte[27]);
 
         var ex = Assert.Throws<ArgumentException>(() =>
             mLoginStateHandler.DecryptLoginState(invalidEncryptedState, TestLoginStateSecret));
@@ -334,5 +335,99 @@ public class LoginStateHandlerTests
         var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false, null);
 
         Assert.Equal("newerValue", result);
+    }
+
+    [Fact]
+    public void GetAndClearLoginStateCookie_DoesNotClearCookiesForOtherStates()
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var cookies = new Dictionary<string, string>
+        {
+            { $"login#testState#{timestamp}", "encryptedValue" },
+            { $"login#otherTabState#{timestamp - 1000}", "otherTabValue" },
+        };
+        var httpContext = TestUtils.setupHttpContext("example.com", queryString: "state=testState", requestCookies: cookies);
+
+        mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false, null);
+
+        var deletedCookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie")
+            .Where(c => c.Contains("max-age=0", StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Split('=')[0].Trim())
+            .ToList();
+        Assert.Equal(new[] { $"login#testState#{timestamp}" }, deletedCookies);
+    }
+
+    [Fact]
+    public void GetAndClearLoginStateCookie_WithNoMatchingCookie_ClearsNothing()
+    {
+        var cookies = new Dictionary<string, string>
+        {
+            { $"login#otherTabState#{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}", "otherTabValue" },
+        };
+        var httpContext = TestUtils.setupHttpContext("example.com", queryString: "state=testState", requestCookies: cookies);
+
+        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false, null);
+
+        Assert.Equal(string.Empty, result);
+        Assert.Empty(httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie"));
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithTamperedCookie_ThrowsCryptographicException()
+    {
+        var encrypted = Convert.FromBase64String(EncryptForTest(TestLoginStateSecret));
+        encrypted[^1] ^= 0x01;
+
+        Assert.ThrowsAny<CryptographicException>(() =>
+            mLoginStateHandler.DecryptLoginState(Convert.ToBase64String(encrypted), TestLoginStateSecret));
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithTamperedAuthTag_ThrowsCryptographicException()
+    {
+        var encrypted = Convert.FromBase64String(EncryptForTest(TestLoginStateSecret));
+        encrypted[12] ^= 0x01;
+
+        Assert.ThrowsAny<CryptographicException>(() =>
+            mLoginStateHandler.DecryptLoginState(Convert.ToBase64String(encrypted), TestLoginStateSecret));
+    }
+
+    [Fact]
+    public void DecryptLoginState_WithDifferentSecret_ThrowsCryptographicException()
+    {
+        var encryptedValue = EncryptForTest(TestLoginStateSecret);
+
+        Assert.ThrowsAny<CryptographicException>(() =>
+            mLoginStateHandler.DecryptLoginState(encryptedValue, new string('b', 32)));
+    }
+
+    // Login state cookies created by 4.x were AES-CBC encrypted, with the value stored as <ciphertext>|<iv>.
+    [Fact]
+    public void DecryptLoginState_WithLegacyCbcCookie_ThrowsFormatException()
+    {
+        using var aes = Aes.Create();
+        aes.Key = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(TestLoginStateSecret));
+        aes.GenerateIV();
+        var plaintext = System.Text.Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new LoginState("s", "v", "https://example.com/callback", null, null)));
+        var ciphertext = aes.EncryptCbc(plaintext, aes.IV);
+        var legacyValue = $"{Convert.ToBase64String(ciphertext)}|{Convert.ToBase64String(aes.IV)}";
+
+        Assert.Throws<FormatException>(() => mLoginStateHandler.DecryptLoginState(legacyValue, TestLoginStateSecret));
+    }
+
+    [Fact]
+    public void CreateLoginStateCookie_UsesAFreshNonceForEachCookie()
+    {
+        Assert.NotEqual(EncryptForTest(TestLoginStateSecret), EncryptForTest(TestLoginStateSecret));
+    }
+
+    private static string EncryptForTest(string loginStateSecret)
+    {
+        var loginState = new LoginState("state123", "verifier123", "https://example.com/callback", "/dashboard", null);
+        var httpContext = TestUtils.setupHttpContext("example.com");
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, loginStateSecret, true, null);
+
+        var cookie = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie").Single(c => c.StartsWith("login#state123#"));
+        return HttpUtility.UrlDecode(cookie.Split(";")[0].Split("=", 2)[1]);
     }
 }

@@ -12,6 +12,8 @@ internal class LoginStateHandler : ILoginStateHandler
     private const string LoginStateCookiePrefix = "login";
     private const string LoginStateCookieSeparator = "#";
     private const int MaxNumberOfLoginStateCookies = 3;
+    private const int NonceSize = 12; // 96 bits (recommended for AES-GCM per NIST SP 800-38D)
+    private const int TagSize = 16; // 128 bits (GCM authentication tag)
 
     /// <summary>
     /// Initializes a new instance of the <see cref="LoginStateHandler"/> class.
@@ -77,11 +79,7 @@ internal class LoginStateHandler : ILoginStateHandler
         // This should resolve to a single cookie with this prefix or no cookie at all if it got cleared or expired.
         var matchingLoginStateCookies = httpContext.Request.Cookies
             .Where(c => c.Key.StartsWith($"{LoginStateCookiePrefix}{LoginStateCookieSeparator}{state}{LoginStateCookieSeparator}"))
-            .OrderBy(c => long.Parse(c.Key?.Split(LoginStateCookieSeparator)[2] ?? string.Empty))
-            .ToList();
-
-        var allLoginStateCookies = httpContext.Request.Cookies
-            .Where(c => c.Key.StartsWith($"{LoginStateCookiePrefix}{LoginStateCookieSeparator}"))
+            .OrderBy(c => GetCookieCreationTime(c.Key))
             .ToList();
 
         var loginStateCookie = string.Empty;
@@ -92,9 +90,10 @@ internal class LoginStateHandler : ILoginStateHandler
             loginStateCookie = matchingLoginStateCookies.Last().Value;
         }
 
-        foreach (var cookie in allLoginStateCookies)
+        // Only clear the cookies for this state. Login state cookies for other states belong to logins that were
+        // started in other tabs and haven't finished yet.
+        foreach (var cookie in matchingLoginStateCookies)
         {
-            // httpContext.Response.Cookies.Delete(cookie.Key);
             httpContext.Response.Cookies.Append(cookie.Key, string.Empty, new CookieOptions
             {
                 Domain = cookieDomain,
@@ -120,25 +119,21 @@ internal class LoginStateHandler : ILoginStateHandler
             throw new ArgumentException("Login state secret must be at least 32 characters long");
         }
 
-        var parts = encryptedState.Split(new[] { '|' }, 2);
-        if (parts.Length != 2)
+        // Format: [nonce:12][auth_tag:16][ciphertext:variable], base64 encoded.
+        var encrypted = Convert.FromBase64String(encryptedState);
+        if (encrypted.Length < NonceSize + TagSize)
         {
             throw new ArgumentException("Invalid encrypted state format");
         }
 
-        var encrypted = Convert.FromBase64String(parts[0]);
-        var iv = Convert.FromBase64String(parts[1]);
+        var nonce = encrypted.AsSpan(0, NonceSize);
+        var tag = encrypted.AsSpan(NonceSize, TagSize);
+        var ciphertext = encrypted.AsSpan(NonceSize + TagSize);
+        var decrypted = new byte[ciphertext.Length];
 
-        // Derive the same 32-byte key using SHA256 (same as encryption)
-        using var sha256 = SHA256.Create();
-        var key = sha256.ComputeHash(Encoding.UTF8.GetBytes(loginStateSecret));
-
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.IV = iv;
-
-        using var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-        var decrypted = decryptor.TransformFinalBlock(encrypted, 0, encrypted.Length);
+        // Throws AuthenticationTagMismatchException (a CryptographicException) when the cookie was changed.
+        using var aes = new AesGcm(DeriveKey(loginStateSecret), TagSize);
+        aes.Decrypt(nonce, ciphertext, tag, decrypted);
 
         try
         {
@@ -167,6 +162,19 @@ internal class LoginStateHandler : ILoginStateHandler
         rng.GetBytes(randomBytes);
         var base64 = Convert.ToBase64String(randomBytes);
         return base64.Replace('+', '-').Replace('/', '_').TrimEnd('=');
+    }
+
+    // Hashes the whole secret into a 32-byte AES-256 key, so that no part of a secret longer than 32 characters is
+    // ignored.
+    private static byte[] DeriveKey(string loginStateSecret)
+    {
+        return SHA256.HashData(Encoding.UTF8.GetBytes(loginStateSecret));
+    }
+
+    private static long GetCookieCreationTime(string cookieName)
+    {
+        var parts = cookieName.Split(LoginStateCookieSeparator);
+        return parts.Length > 2 && long.TryParse(parts[2], out var result) ? result : long.MaxValue;
     }
 
     private void ClearOldestLoginStateCookies(HttpContext httpContext, bool dangerouslyDisableSecureCookies, string? cookieDomain)
@@ -214,16 +222,18 @@ internal class LoginStateHandler : ILoginStateHandler
             throw new ArgumentException("Login state secret must be at least 32 characters long");
         }
 
-        // Derive 32-byte key (256 bits) using SHA256
-        using var sha256 = SHA256.Create();
-        var key = sha256.ComputeHash(Encoding.UTF8.GetBytes(loginStateSecret));
-
-        using var aes = Aes.Create();
-        aes.Key = key;
-        aes.GenerateIV();
-        using var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
         var plaintext = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(loginState));
-        var encrypted = encryptor.TransformFinalBlock(plaintext, 0, plaintext.Length);
-        return Convert.ToBase64String(encrypted) + "|" + Convert.ToBase64String(aes.IV);
+
+        // Format: [nonce:12][auth_tag:16][ciphertext:variable], base64 encoded. AES-GCM signs the ciphertext as well
+        // as encrypting it, so any change to the cookie is detected when it is decrypted.
+        var encrypted = new byte[NonceSize + TagSize + plaintext.Length];
+        var nonce = encrypted.AsSpan(0, NonceSize);
+        var tag = encrypted.AsSpan(NonceSize, TagSize);
+        var ciphertext = encrypted.AsSpan(NonceSize + TagSize);
+        RandomNumberGenerator.Fill(nonce);
+
+        using var aes = new AesGcm(DeriveKey(loginStateSecret), TagSize);
+        aes.Encrypt(nonce, plaintext, ciphertext, tag);
+        return Convert.ToBase64String(encrypted);
     }
 }

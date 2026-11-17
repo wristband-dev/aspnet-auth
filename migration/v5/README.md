@@ -172,8 +172,11 @@ if (callbackResult.Type == CallbackResultType.Completed)
 
 No code or config changes are needed for the following:
 
-1. The Login State Cookie's 1-hour lifetime is now also enforced when decrypting, with a 60-second clock skew tolerance. Login State Cookies created by 4.x don't record when they were created, so a user who is mid-login during the upgrade is redirected to the Login Endpoint once. Because Wristband already has an authenticated session for that user, the new login flow completes without asking them to sign in again.
-2. When the Login State Cookie cannot be decrypted (tampered, malformed, or encrypted with a different secret), `Callback()` no longer throws an exception. It returns a `RedirectRequired` result with the `InvalidLoginState` reason.
+1. The Login State Cookie is now encrypted with AES-GCM instead of AES-CBC, so any change to the cookie is detected. A changed Login State Cookie makes `Callback()` return a `RedirectRequired` result with the `InvalidLoginState` reason.
+2. Login State Cookies created by 4.x can't be decrypted by 5.x. They also don't record when they were created, which 5.x needs to enforce the cookie's 1-hour lifetime when decrypting (with a 60-second clock skew tolerance). Either way, a user who is mid-login during the upgrade is redirected to the Login Endpoint once. Because Wristband already has an authenticated session for that user, the new login flow completes without asking them to sign in again.
+3. During a rolling deploy, a login that starts on a 4.x instance and finishes on a 5.x instance, or the reverse, fails in the same way.
+4. When the Login State Cookie cannot be decrypted (tampered, malformed, or encrypted with a different secret), `Callback()` no longer throws an exception. It returns a `RedirectRequired` result with the `InvalidLoginState` reason.
+5. `Callback()` now clears only the Login State Cookie for the current login. Logins started in other browser tabs keep their Login State Cookies and can still complete.
 
 > **⚠️ Important:**
 >
