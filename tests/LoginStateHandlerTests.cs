@@ -45,7 +45,7 @@ public class LoginStateHandlerTests
             httpContext,
             loginState,
             TestLoginStateSecret,
-            false);
+            false, null);
 
         var cookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie");
         var loginStateCookie = cookies.Single(c => c.StartsWith("login#state123#"));
@@ -71,7 +71,7 @@ public class LoginStateHandlerTests
             requestCookies: cookies
         );
 
-        var loginStateCookie = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false);
+        var loginStateCookie = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false, null);
 
         Assert.Equal("encryptedValue", loginStateCookie);
 
@@ -95,7 +95,7 @@ public class LoginStateHandlerTests
             new Dictionary<string, object> { { "test", "value" } });
         var httpContext = TestUtils.setupHttpContext("example.com");
 
-        mLoginStateHandler.CreateLoginStateCookie(httpContext, originalState, TestLoginStateSecret, true);
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, originalState, TestLoginStateSecret, true, null);
 
         var cookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie");
         var loginStateCookie = cookies.Single(c => c.StartsWith("login#state123#"));
@@ -138,7 +138,7 @@ public class LoginStateHandlerTests
         var shortSecret = "abcdefghijklmnopqrst";
 
         var ex = Assert.Throws<ArgumentException>(() =>
-            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, shortSecret, false));
+            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, shortSecret, false, null));
         Assert.Contains("must be at least 32 characters long", ex.Message);
     }
 
@@ -154,7 +154,7 @@ public class LoginStateHandlerTests
             null);
 
         var ex = Assert.Throws<ArgumentException>(() =>
-            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, "", false));
+            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, "", false, null));
         Assert.Contains("must be at least 32 characters long", ex.Message);
     }
 
@@ -170,7 +170,7 @@ public class LoginStateHandlerTests
             null);
 
         var ex = Assert.Throws<ArgumentException>(() =>
-            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, null!, false));
+            mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, null!, false, null));
         Assert.Contains("must be at least 32 characters long", ex.Message);
     }
 
@@ -231,7 +231,7 @@ public class LoginStateHandlerTests
         Assert.Equal(32, exactSecret.Length);
 
         // Should not throw
-        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, exactSecret, false);
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, exactSecret, false, null);
 
         var cookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie");
         var loginStateCookie = cookies.Single(c => c.StartsWith("login#state123#"));
@@ -254,7 +254,7 @@ public class LoginStateHandlerTests
         Assert.True(longSecret.Length > 32);
 
         // Should work fine - uses SHA256 to derive 32-byte key
-        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, longSecret, false);
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, longSecret, false, null);
 
         var cookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie");
         var loginStateCookie = cookies.Single(c => c.StartsWith("login#state123#"));
@@ -282,7 +282,7 @@ public class LoginStateHandlerTests
             "https://example.com/callback",
             string.Empty,
             null);
-        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, TestLoginStateSecret, false);
+        mLoginStateHandler.CreateLoginStateCookie(httpContext, loginState, TestLoginStateSecret, false, null);
 
         var deletedCookies = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie")
             .Where(c => c.Contains("max-age=0", StringComparison.OrdinalIgnoreCase))
@@ -310,7 +310,7 @@ public class LoginStateHandlerTests
     {
         var httpContext = TestUtils.setupHttpContext("example.com");
 
-        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false);
+        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false, null);
 
         Assert.Equal(string.Empty, result);
     }
@@ -331,7 +331,7 @@ public class LoginStateHandlerTests
             requestCookies: cookies
         );
 
-        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false);
+        var result = mLoginStateHandler.GetAndClearLoginStateCookie(httpContext, false, null);
 
         Assert.Equal("newerValue", result);
     }

@@ -196,124 +196,6 @@ public class ConfigResolverTests
         Assert.Equal("The [RedirectUri] config must have a value when auto-configure is disabled.", exception.Message);
     }
 
-    [Fact]
-    public void Constructor_WithRootDomainButNoTokenInLoginUrl_ThrowsArgumentException()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://app.example.com/login", // Missing tenant placeholder
-            RedirectUri = "https://{tenant_name}.example.com/callback",
-            ParseTenantFromRootDomain = "example.com"
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithRootDomainButNoTokenInRedirectUri_ThrowsArgumentException()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_name}.example.com/login",
-            RedirectUri = "https://app.example.com/callback", // Missing tenant placeholder
-            ParseTenantFromRootDomain = "example.com"
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithTokenButNoRootDomainInLoginUrl_ThrowsArgumentException()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_name}.example.com/login",
-            RedirectUri = "https://app.example.com/callback"
-            // Missing ParseTenantFromRootDomain
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("cannot contain the \"{tenant_name}\" token", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithTokenButNoRootDomainInRedirectUri_ThrowsArgumentException()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://app.example.com/login",
-            RedirectUri = "https://{tenant_name}.example.com/callback"
-            // Missing ParseTenantFromRootDomain
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("cannot contain the \"{tenant_name}\" token", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithPartialUrlConfigsAndAutoConfigureEnabled_ValidatesTokens()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = true,
-            LoginUrl = "https://test.com/login", // No token
-            ParseTenantFromRootDomain = "test.com" // But parsing enabled
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithValidTenantConfiguration_Succeeds()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_name}.test.com/login",
-            RedirectUri = "https://{tenant_name}.test.com/callback",
-            ParseTenantFromRootDomain = "test.com",
-            LoginStateSecret = "this-is-a-32-character-secret123"
-        };
-
-        var resolver = new ConfigResolver(config, _mockApiClient.Object);
-        Assert.NotNull(resolver);
-    }
-
     // ////////////////////////////////////
     //  SIMPLE GETTER TESTS
     // ////////////////////////////////////
@@ -603,7 +485,8 @@ public class ConfigResolverTests
             ClientId = "test-client-id",
             ClientSecret = "test-client-secret",
             WristbandApplicationVanityDomain = "test.wristband.dev",
-            ParseTenantFromRootDomain = "manual.example.com",
+            LoginUrl = "https://{tenant_name}.manual.example.com/login",
+            RedirectUri = "https://{tenant_name}.manual.example.com/callback",
             AutoConfigureEnabled = true
         };
         var resolver = new ConfigResolver(config, _mockApiClient.Object);
@@ -1045,100 +928,6 @@ public class ConfigResolverTests
     //  DYNAMIC CONFIGURATION VALIDATION TESTS
     // ////////////////////////////////////
 
-    [Fact]
-    public async Task DynamicValidation_WithTenantDomainButNoTokenInResolvedLoginUrl_ThrowsWristbandError()
-    {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://sdk.example.com/login", // No tenant token
-            RedirectUri = "https://sdk.example.com/callback"
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            ParseTenantFromRootDomain = "test.com", // Tenant parsing enabled
-            AutoConfigureEnabled = true
-        };
-        var resolver = new ConfigResolver(config, _mockApiClient.Object);
-
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetLoginUrl());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.ErrorDescription);
-    }
-
-    [Fact]
-    public async Task DynamicValidation_WithTenantDomainButNoTokenInResolvedRedirectUri_ThrowsWristbandError()
-    {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://{tenant_name}.sdk.example.com/login",
-            RedirectUri = "https://sdk.example.com/callback" // No tenant token
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            ParseTenantFromRootDomain = "test.com", // Tenant parsing enabled
-            AutoConfigureEnabled = true
-        };
-        var resolver = new ConfigResolver(config, _mockApiClient.Object);
-
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetRedirectUri());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.ErrorDescription);
-    }
-
-    [Fact]
-    public async Task DynamicValidation_WithTokenButNoTenantParsingInResolvedLoginUrl_ThrowsWristbandError()
-    {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://{tenant_name}.sdk.example.com/login", // Has tenant token
-            RedirectUri = "https://sdk.example.com/callback",
-            LoginUrlTenantDomainSuffix = null // No tenant parsing
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
-        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
-
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetLoginUrl());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("cannot contain the \"{tenant_name}\" token", exception.ErrorDescription);
-    }
-
-    [Fact]
-    public async Task DynamicValidation_WithTokenButNoTenantParsingInResolvedRedirectUri_ThrowsWristbandError()
-    {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://sdk.example.com/login",
-            RedirectUri = "https://{tenant_name}.sdk.example.com/callback", // Has tenant token
-            LoginUrlTenantDomainSuffix = null // No tenant parsing
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
-        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
-
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetRedirectUri());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("cannot contain the \"{tenant_name}\" token", exception.ErrorDescription);
-    }
-
     // ////////////////////////////////////
     //  EDGE CASES AND INTEGRATION TESTS
     // ////////////////////////////////////
@@ -1248,7 +1037,6 @@ public class ConfigResolverTests
             ClientSecret = "test-client-secret",
             WristbandApplicationVanityDomain = "test.wristband.dev",
             CustomApplicationLoginPageUrl = "",
-            ParseTenantFromRootDomain = "",
             AutoConfigureEnabled = true
         };
         var resolver = new ConfigResolver(config, _mockApiClient.Object);
@@ -1270,7 +1058,6 @@ public class ConfigResolverTests
             ClientSecret = "test-client-secret",
             WristbandApplicationVanityDomain = "test.wristband.dev",
             LoginUrl = "https://{tenant_name}.manual.com/login",
-            ParseTenantFromRootDomain = "manual.com",
             AutoConfigureEnabled = true
         };
 
@@ -1329,57 +1116,6 @@ public class ConfigResolverTests
         Assert.Equal("https://sdk.example.com/callback", result);
 
         _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Exactly(2));
-    }
-
-    [Fact]
-    public async Task DynamicValidation_WithSdkSuffix_EnablesTenantParsing()
-    {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://sdk.example.com/login", // No token
-            RedirectUri = "https://sdk.example.com/callback", // No token
-            LoginUrlTenantDomainSuffix = "sdk.example.com" // This should enable tenant parsing
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
-        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
-
-        // Should fail because SDK config enables tenant parsing but URLs don't have tokens
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetLoginUrl());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.ErrorDescription);
-    }
-
-    [Fact]
-    public async Task DynamicValidation_SdkEnablesTenantParsingButManualUrlHasNoToken()
-    {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://manual.example.com/login", // SDK URL without token
-            RedirectUri = "https://{tenant_name}.sdk.example.com/callback",
-            LoginUrlTenantDomainSuffix = "sdk.example.com" // SDK enables tenant parsing
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            // No manual ParseTenantFromRootDomain - should use SDK's LoginUrlTenantDomainSuffix
-            AutoConfigureEnabled = true
-        };
-
-        var resolver = new ConfigResolver(config, _mockApiClient.Object);
-
-        // Should fail because SDK LoginUrl has no token but SDK enables parsing via LoginUrlTenantDomainSuffix
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetLoginUrl());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("must contain the \"{tenant_name}\" token", exception.ErrorDescription);
     }
 
     // ////////////////////////////////////
@@ -1496,153 +1232,179 @@ public class ConfigResolverTests
         Assert.Equal(2, callCount); // One more successful call
     }
 
-    ////////////////////////////////////////////////////////
-    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
-    ////////////////////////////////////////////////////////
+    // ////////////////////////////////////
+    //  TENANT PLACEHOLDER VALIDATION TESTS
+    // ////////////////////////////////////
 
-    [Fact]
-    public void Constructor_WithRootDomainButNoTenantDomainTokenInLoginUrl_ThrowsArgumentException_BackwardsCompat()
+    private static WristbandAuthConfig StrictConfig(string loginUrl, string redirectUri)
     {
-        var config = new WristbandAuthConfig
+        return new WristbandAuthConfig
         {
             ClientId = "test-client-id",
             ClientSecret = "test-client-secret",
             WristbandApplicationVanityDomain = "test.wristband.dev",
             AutoConfigureEnabled = false,
-            LoginUrl = "https://app.example.com/login", // Missing {tenant_domain} token
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
-            ParseTenantFromRootDomain = "example.com"
+            LoginUrl = loginUrl,
+            RedirectUri = redirectUri,
         };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("must contain the \"{tenant_name}\"", exception.Message);
     }
 
-    [Fact]
-    public void Constructor_WithRootDomainButNoTenantDomainTokenInRedirectUri_ThrowsArgumentException_BackwardsCompat()
+    [Theory]
+    [InlineData("https://{tenant_name}.test.com/login", "https://test.com/callback", "The [RedirectUri] must contain the \"{tenant_name}\" placeholder when the [LoginUrl] contains it.")]
+    [InlineData("https://test.com/login", "https://{tenant_name}.test.com/callback", "The [RedirectUri] cannot contain the \"{tenant_name}\" placeholder when the [LoginUrl] does not contain it.")]
+    [InlineData("https://app.{tenant_name}.test.com/login", "https://{tenant_name}.test.com/callback", "The [LoginUrl] can only contain the \"{tenant_name}\" placeholder once, as the leftmost part of its hostname.")]
+    [InlineData("https://{tenant_name}.test.com/{tenant_name}/login", "https://{tenant_name}.test.com/callback", "The [LoginUrl] can only contain the \"{tenant_name}\" placeholder once, as the leftmost part of its hostname.")]
+    [InlineData("https://{tenant_name}.test.com/login", "https://test.com/{tenant_name}/callback", "The [RedirectUri] can only contain the \"{tenant_name}\" placeholder once, as the leftmost part of its hostname.")]
+    [InlineData("https://{tenant_domain}.test.com/login", "https://{tenant_name}.test.com/callback", "The [RedirectUri] cannot contain the \"{tenant_name}\" placeholder when the [LoginUrl] does not contain it.")]
+    public void Constructor_WithInvalidTenantPlaceholders_ThrowsArgumentException(string loginUrl, string redirectUri, string expectedMessage)
     {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://app.example.com/callback", // Missing {tenant_domain} token
-            ParseTenantFromRootDomain = "example.com"
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("must contain the \"{tenant_name}\"", exception.Message);
+        var exception = Assert.Throws<ArgumentException>(() => new ConfigResolver(StrictConfig(loginUrl, redirectUri), _mockApiClient.Object));
+        Assert.Equal(expectedMessage, exception.Message);
     }
 
-    [Fact]
-    public void Constructor_WithTenantDomainTokenButNoRootDomainInLoginUrl_ThrowsArgumentException_BackwardsCompat()
+    [Theory]
+    [InlineData("https://{tenant_name}.test.com/login", "https://{tenant_name}.test.com/callback")]
+    [InlineData("http://{tenant_name}.localhost:6001/login", "http://{tenant_name}.localhost:6001/callback")]
+    [InlineData("https://test.com/login", "https://test.com/callback")]
+    public void Constructor_WithValidTenantPlaceholders_Succeeds(string loginUrl, string redirectUri)
     {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://app.example.com/callback"
-            // Missing ParseTenantFromRootDomain
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("cannot contain the \"{tenant_name}\"", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithTenantDomainTokenButNoRootDomainInRedirectUri_ThrowsArgumentException_BackwardsCompat()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://app.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback"
-            // Missing ParseTenantFromRootDomain
-        };
-
-        var exception = Assert.Throws<ArgumentException>(
-            () => new ConfigResolver(config, _mockApiClient.Object));
-
-        Assert.Contains("cannot contain the \"{tenant_name}\"", exception.Message);
-    }
-
-    [Fact]
-    public void Constructor_WithValidTenantDomainTokenConfiguration_Succeeds_BackwardsCompat()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = "test-client-id",
-            ClientSecret = "test-client-secret",
-            WristbandApplicationVanityDomain = "test.wristband.dev",
-            AutoConfigureEnabled = false,
-            LoginUrl = "https://{tenant_domain}.test.com/login",
-            RedirectUri = "https://{tenant_domain}.test.com/callback",
-            ParseTenantFromRootDomain = "test.com",
-            LoginStateSecret = "this-is-a-32-character-secret123"
-        };
-
-        var resolver = new ConfigResolver(config, _mockApiClient.Object);
+        var resolver = new ConfigResolver(StrictConfig(loginUrl, redirectUri), _mockApiClient.Object);
         Assert.NotNull(resolver);
     }
 
     [Fact]
-    public async Task DynamicValidation_WithTenantDomainButNoTokenInResolvedLoginUrl_ThrowsWristbandError_BackwardsCompat()
+    public void Constructor_WithPartialUrlConfigs_ValidatesPlaceholderPosition()
     {
-        var sdkConfig = new SdkConfiguration
-        {
-            LoginUrl = "https://sdk.example.com/login", // No tenant token
-            RedirectUri = "https://sdk.example.com/callback"
-        };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
-
         var config = new WristbandAuthConfig
         {
             ClientId = "test-client-id",
             ClientSecret = "test-client-secret",
             WristbandApplicationVanityDomain = "test.wristband.dev",
-            ParseTenantFromRootDomain = "test.com", // Tenant parsing enabled
-            AutoConfigureEnabled = true
+            LoginUrl = "https://app.{tenant_name}.test.com/login",
         };
-        var resolver = new ConfigResolver(config, _mockApiClient.Object);
 
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetLoginUrl());
-
-        Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("must contain the \"{tenant_name}\"", exception.ErrorDescription);
+        var exception = Assert.Throws<ArgumentException>(() => new ConfigResolver(config, _mockApiClient.Object));
+        Assert.Contains("The [LoginUrl] can only contain", exception.Message);
     }
 
     [Fact]
-    public async Task DynamicValidation_WithTenantDomainTokenButNoTenantParsingInResolvedLoginUrl_ThrowsWristbandError_BackwardsCompat()
+    public void Constructor_WithOnlyManualLoginUrl_DefersPlaceholderComparison()
     {
-        var sdkConfig = new SdkConfiguration
+        var config = new WristbandAuthConfig
         {
-            LoginUrl = "https://{tenant_domain}.sdk.example.com/login", // Has tenant token
-            RedirectUri = "https://sdk.example.com/callback",
-            LoginUrlTenantDomainSuffix = null // No tenant parsing
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            WristbandApplicationVanityDomain = "test.wristband.dev",
+            LoginUrl = "https://{tenant_name}.test.com/login",
         };
-        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(sdkConfig);
 
-        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
+        Assert.NotNull(new ConfigResolver(config, _mockApiClient.Object));
+    }
 
-        var exception = await Assert.ThrowsAsync<WristbandError>(
-            () => resolver.GetLoginUrl());
+    [Fact]
+    public async Task DynamicValidation_WithManualLoginUrlPlaceholderButNoResolvedRedirectUriPlaceholder_ThrowsWristbandError()
+    {
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(new SdkConfiguration
+        {
+            LoginUrl = "https://sdk.example.com/login",
+            RedirectUri = "https://sdk.example.com/callback",
+        });
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            WristbandApplicationVanityDomain = "test.wristband.dev",
+            LoginUrl = "https://{tenant_name}.test.com/login",
+        };
+        var resolver = new ConfigResolver(config, _mockApiClient.Object);
+
+        var exception = await Assert.ThrowsAsync<WristbandError>(() => resolver.GetRedirectUri());
 
         Assert.Equal("config_validation_error", exception.Error);
-        Assert.Contains("cannot contain the \"{tenant_name}\"", exception.ErrorDescription);
+        Assert.Contains("The resolved [RedirectUri] must contain the", exception.ErrorDescription);
+    }
+
+    [Fact]
+    public async Task DynamicValidation_WithSdkUrlsOnly_TrustsPlaceholdersAsIs()
+    {
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(new SdkConfiguration
+        {
+            LoginUrl = "https://{tenant_name}.sdk.example.com/login",
+            RedirectUri = "https://sdk.example.com/callback",
+        });
+        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
+
+        Assert.Equal("https://{tenant_name}.sdk.example.com/login", await resolver.GetLoginUrl());
+    }
+
+    // ////////////////////////////////////
+    //  DERIVED AND APP-LEVEL CONFIG TESTS
+    // ////////////////////////////////////
+
+    [Theory]
+    [InlineData("https://{tenant_name}.myapp.com/auth/login", "myapp.com", "https://myapp.com/auth/login")]
+    [InlineData("http://{tenant_name}.localhost:6001/auth/login", "localhost", "http://localhost:6001/auth/login")]
+    [InlineData("https://myapp.com/auth/login", "", "")]
+    public async Task RootDomainAndFallbackLoginUrl_AreDerivedFromManualLoginUrl(string loginUrl, string expectedRootDomain, string expectedFallbackLoginUrl)
+    {
+        var resolver = new ConfigResolver(StrictConfig(loginUrl, loginUrl.Replace("/auth/login", "/auth/callback")), _mockApiClient.Object);
+
+        Assert.Equal(expectedRootDomain, await resolver.GetParseTenantFromRootDomain());
+        Assert.Equal(expectedFallbackLoginUrl, await resolver.GetFallbackLoginUrl());
+    }
+
+    [Fact]
+    public async Task RootDomainAndFallbackLoginUrl_ComeFromSdkConfigWithoutManualLoginUrl()
+    {
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(new SdkConfiguration
+        {
+            LoginUrl = "https://{tenant_name}.sdk.example.com/login",
+            RedirectUri = "https://{tenant_name}.sdk.example.com/callback",
+            LoginUrlTenantDomainSuffix = "sdk.example.com",
+            FallbackLoginUrl = "https://sdk.example.com/login",
+        });
+        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
+
+        Assert.Equal("sdk.example.com", await resolver.GetParseTenantFromRootDomain());
+        Assert.Equal("https://sdk.example.com/login", await resolver.GetFallbackLoginUrl());
+    }
+
+    [Fact]
+    public async Task GetApplicationAuthorizationRequestsEnabled_WithAutoConfigureDisabled_DefaultsToTrue()
+    {
+        var resolver = new ConfigResolver(StrictConfig("https://test.com/login", "https://test.com/callback"), _mockApiClient.Object);
+        Assert.True(await resolver.GetApplicationAuthorizationRequestsEnabled());
+    }
+
+    [Fact]
+    public async Task GetApplicationAuthorizationRequestsEnabled_WithManualConfig_ReturnsManualValue()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = "test-client-id",
+            ClientSecret = "test-client-secret",
+            WristbandApplicationVanityDomain = "test.wristband.dev",
+            ApplicationAuthorizationRequestsEnabled = false,
+        };
+        var resolver = new ConfigResolver(config, _mockApiClient.Object);
+
+        Assert.False(await resolver.GetApplicationAuthorizationRequestsEnabled());
+        _mockApiClient.Verify(x => x.GetSdkConfiguration(), Times.Never);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task GetApplicationAuthorizationRequestsEnabled_WithAutoConfigure_ReturnsSdkValue(bool sdkValue)
+    {
+        _mockApiClient.Setup(x => x.GetSdkConfiguration()).ReturnsAsync(new SdkConfiguration
+        {
+            LoginUrl = "https://sdk.example.com/login",
+            RedirectUri = "https://sdk.example.com/callback",
+            ApplicationAuthorizationRequestsEnabled = sdkValue,
+        });
+        var resolver = new ConfigResolver(_validConfig, _mockApiClient.Object);
+
+        Assert.Equal(sdkValue, await resolver.GetApplicationAuthorizationRequestsEnabled());
     }
 }

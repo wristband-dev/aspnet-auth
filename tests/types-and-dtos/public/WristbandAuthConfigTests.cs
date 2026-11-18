@@ -15,7 +15,7 @@ public class WristbandAuthConfigTests
         Assert.Null(config.RedirectUri);
         Assert.Null(config.WristbandApplicationVanityDomain);
         Assert.Null(config.CustomApplicationLoginPageUrl);
-        Assert.Null(config.ParseTenantFromRootDomain);
+        Assert.Null(config.ApplicationAuthorizationRequestsEnabled);
         Assert.NotNull(config.Scopes);
         Assert.Empty(config.Scopes);
         Assert.False(config.DangerouslyDisableSecureCookies);
@@ -35,7 +35,6 @@ public class WristbandAuthConfigTests
         var wristbandApplicationDomain = "wristband.example.com";
         var customApplicationLoginPageUrl = "https://custom-login.example.com";
         var dangerouslyDisableSecureCookies = true;
-        var rootDomain = "example.com";
         var scopes = new List<string> { "openid", "profile", "email" };
         var isApplicationCustomDomainActive = true;
         var tokenExpirationBuffer = 120;
@@ -49,11 +48,11 @@ public class WristbandAuthConfigTests
             wristbandApplicationDomain,
             customApplicationLoginPageUrl,
             dangerouslyDisableSecureCookies,
-            rootDomain,
             scopes,
             isApplicationCustomDomainActive,
             tokenExpirationBuffer,
-            autoConfigureEnabled
+            autoConfigureEnabled,
+            applicationAuthorizationRequestsEnabled: false
         );
 
         Assert.False(config.AutoConfigureEnabled);
@@ -64,7 +63,7 @@ public class WristbandAuthConfigTests
         Assert.Equal(redirectUri, config.RedirectUri);
         Assert.Equal(wristbandApplicationDomain, config.WristbandApplicationVanityDomain);
         Assert.Equal(customApplicationLoginPageUrl, config.CustomApplicationLoginPageUrl);
-        Assert.Equal(rootDomain, config.ParseTenantFromRootDomain);
+        Assert.False(config.ApplicationAuthorizationRequestsEnabled);
         Assert.NotNull(config.Scopes);
         Assert.Equal(scopes, config.Scopes);
         Assert.True(config.DangerouslyDisableSecureCookies);
@@ -85,7 +84,7 @@ public class WristbandAuthConfigTests
         Assert.Null(config.RedirectUri);
         Assert.Null(config.WristbandApplicationVanityDomain);
         Assert.Null(config.CustomApplicationLoginPageUrl);
-        Assert.Null(config.ParseTenantFromRootDomain);
+        Assert.Null(config.ApplicationAuthorizationRequestsEnabled);
         Assert.Null(config.Scopes);
         Assert.Null(config.DangerouslyDisableSecureCookies);
         Assert.Null(config.IsApplicationCustomDomainActive);
@@ -106,7 +105,7 @@ public class WristbandAuthConfigTests
         config.WristbandApplicationVanityDomain = "updated-wristband.example.com";
         config.CustomApplicationLoginPageUrl = "https://updated-custom-login.example.com";
         config.DangerouslyDisableSecureCookies = true;
-        config.ParseTenantFromRootDomain = "updated-example.com";
+        config.ApplicationAuthorizationRequestsEnabled = false;
         config.Scopes = new List<string> { "custom-scope" };
         config.IsApplicationCustomDomainActive = true;
         config.TokenExpirationBuffer = 90;
@@ -119,7 +118,7 @@ public class WristbandAuthConfigTests
         Assert.Equal("https://updated.example.com/callback", config.RedirectUri);
         Assert.Equal("updated-wristband.example.com", config.WristbandApplicationVanityDomain);
         Assert.Equal("https://updated-custom-login.example.com", config.CustomApplicationLoginPageUrl);
-        Assert.Equal("updated-example.com", config.ParseTenantFromRootDomain);
+        Assert.False(config.ApplicationAuthorizationRequestsEnabled);
         Assert.NotNull(config.Scopes);
         Assert.Single(config.Scopes);
         Assert.Equal("custom-scope", config.Scopes[0]);
@@ -142,7 +141,6 @@ public class WristbandAuthConfigTests
             wristbandApplicationVanityDomain: null,
             customApplicationLoginPageUrl: null,
             dangerouslyDisableSecureCookies: null,
-            parseTenantFromRootDomain: null,
             scopes: null,
             isApplicationCustomDomainActive: null,
             tokenExpirationBuffer: tokenExpirationBuffer
@@ -163,7 +161,6 @@ public class WristbandAuthConfigTests
             wristbandApplicationVanityDomain: null,
             customApplicationLoginPageUrl: null,
             dangerouslyDisableSecureCookies: null,
-            parseTenantFromRootDomain: null,
             scopes: null,
             isApplicationCustomDomainActive: null,
             tokenExpirationBuffer: 0
@@ -202,7 +199,6 @@ public class WristbandAuthConfigTests
             wristbandApplicationVanityDomain: null,
             customApplicationLoginPageUrl: null,
             dangerouslyDisableSecureCookies: null,
-            parseTenantFromRootDomain: null,
             scopes: null,
             isApplicationCustomDomainActive: null,
             tokenExpirationBuffer: null,

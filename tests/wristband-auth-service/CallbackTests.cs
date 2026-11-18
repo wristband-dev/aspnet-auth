@@ -24,6 +24,7 @@ public class CallbackTests
             RedirectUri = "https://app.example.com/callback",
             WristbandApplicationVanityDomain = "wristband.example.com",
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
 
         _mockLoginStateHandler = new Mock<ILoginStateHandler>();
@@ -74,7 +75,7 @@ public class CallbackTests
             "state=teststate&code=testcode&tenant_name=tenant1");
 
         _mockLoginStateHandler
-            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>()))
+            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .Returns((string?)null!);
 
         var result = await service.Callback(httpContext);
@@ -112,7 +113,7 @@ public class CallbackTests
             "state=teststate&code=testcode&tenant_name=tenant1");
 
         _mockLoginStateHandler
-            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>()))
+            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .Returns("encryptedstate");
 
         _mockLoginStateHandler
@@ -286,7 +287,7 @@ public class CallbackTests
 
         // No login state cookie, so the callback redirects to the tenant login URL.
         _mockLoginStateHandler
-            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>()))
+            .Setup(x => x.GetAndClearLoginStateCookie(It.IsAny<HttpContext>(), It.IsAny<bool>(), It.IsAny<string?>()))
             .Returns(string.Empty);
 
         var result = await service.Callback(httpContext);
@@ -352,7 +353,6 @@ public class CallbackTests
             LoginUrl = "https://{tenant_name}.example.com/login",
             RedirectUri = "https://{tenant_name}.example.com/callback",
             WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
             AutoConfigureEnabled = false,
         };
         var service = SetupWristbandAuthService(config);
@@ -396,47 +396,6 @@ public class CallbackTests
         Assert.Null(result.Reason);
     }
 
-    ////////////////////////////////////////////////////////
-    /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
-    ////////////////////////////////////////////////////////
-
-    [Fact]
-    public async Task Callback_WithTenantDomainToken_ConstructsCorrectRedirectUrl_BackwardsCompat()
-    {
-        var config = new WristbandAuthConfig
-        {
-            ClientId = _defaultConfig.ClientId,
-            ClientSecret = _defaultConfig.ClientSecret,
-            LoginStateSecret = _defaultConfig.LoginStateSecret,
-            LoginUrl = "https://{tenant_domain}.example.com/login",
-            RedirectUri = "https://{tenant_domain}.example.com/callback",
-            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
-            ParseTenantFromRootDomain = "example.com",
-            AutoConfigureEnabled = false,
-        };
-        var service = SetupWristbandAuthService(config);
-        var httpContext = TestUtils.setupHttpContext(
-            "tenant1.example.com",
-            "state=teststate&code=testcode");
-
-        SetupLoginStateMock("teststate", "verifier123");
-
-        _mockApiClient
-            .Setup(x => x.GetTokens(
-                It.IsAny<string>(),
-                It.IsAny<string>(),
-                It.IsAny<string>()))
-            .ThrowsAsync(new InvalidGrantError("Token exchange failed"));
-
-        var result = await service.Callback(httpContext);
-
-        Assert.Equal(CallbackResultType.RedirectRequired, result.Type);
-        Assert.Equal(CallbackData.Empty, result.CallbackData);
-        Assert.Equal(CallbackFailureReason.InvalidGrant, result.Reason);
-
-        var expectedUrl = "https://tenant1.example.com/login";
-        Assert.Equal(expectedUrl, result.RedirectUrl);
-    }
 
     ////////////////////////////////////////////////////////
     /// HELPERS
@@ -454,7 +413,7 @@ public class CallbackTests
         _mockLoginStateHandler
             .Setup(x => x.GetAndClearLoginStateCookie(
                 It.IsAny<HttpContext>(),
-                It.IsAny<bool>()))
+                It.IsAny<bool>(), It.IsAny<string?>()))
             .Returns("encryptedstate");
 
         _mockLoginStateHandler

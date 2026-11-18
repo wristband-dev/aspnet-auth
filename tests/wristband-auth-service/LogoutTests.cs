@@ -18,6 +18,7 @@ namespace Wristband.AspNet.Auth.Tests
             RedirectUri = "https://example.com/callback",
             WristbandApplicationVanityDomain = "example.com",
             AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
         };
 
         public LogoutTests()
@@ -70,7 +71,6 @@ namespace Wristband.AspNet.Auth.Tests
                 LoginUrl = "https://{tenant_name}.example.com/login",
                 RedirectUri = "https://{tenant_name}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                ParseTenantFromRootDomain = "example.com",
                 AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
@@ -119,6 +119,7 @@ namespace Wristband.AspNet.Auth.Tests
                 WristbandApplicationVanityDomain = "example.com",
                 IsApplicationCustomDomainActive = true,  // This changes separator from '-' to '.'
                 AutoConfigureEnabled = false,
+                ApplicationAuthorizationRequestsEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
             HttpContext httpContext = TestUtils.setupHttpContext("some-host.com");
@@ -145,7 +146,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://query-custom.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
         }
 
-        // Test Priority 4a: Tenant from subdomain (when ParseTenantFromRootDomain is set)
+        // Test Priority 4a: Tenant from subdomain (when LoginUrl contains the {tenant_name} placeholder)
         [Fact]
         public async Task Logout_Should_UseTenantFromSubdomain_WhenParseFromRootDomainSet()
         {
@@ -157,7 +158,6 @@ namespace Wristband.AspNet.Auth.Tests
                 LoginUrl = "https://{tenant_name}.example.com/login",
                 RedirectUri = "https://{tenant_name}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                ParseTenantFromRootDomain = "example.com",
                 AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
@@ -168,7 +168,7 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://tenant-from-subdomain-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
         }
 
-        // Test Priority 4b: Tenant from query parameter (when ParseTenantFromRootDomain is NOT set)
+        // Test Priority 4b: Tenant from query parameter (when LoginUrl does NOT contain the placeholder)
         [Fact]
         public async Task Logout_Should_UseTenantFromQuery_WhenParseFromRootDomainNotSet()
         {
@@ -206,6 +206,7 @@ namespace Wristband.AspNet.Auth.Tests
                 WristbandApplicationVanityDomain = "example.com",
                 CustomApplicationLoginPageUrl = "https://custom-login.com",
                 AutoConfigureEnabled = false,
+                ApplicationAuthorizationRequestsEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
             HttpContext httpContext = TestUtils.setupHttpContext("some-random-host.com");
@@ -387,22 +388,18 @@ namespace Wristband.AspNet.Auth.Tests
             Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com&state=custom-state", logoutUrl);
         }
 
-        ////////////////////////////////////////////////////////
-        /// BACKWARDS COMPATIBILITY TESTS FOR {tenant_domain}
-        ////////////////////////////////////////////////////////
 
         [Fact]
-        public async Task Logout_Should_UseTenantDomainTokenInUrl_BackwardsCompat()
+        public async Task Logout_Should_UseTenantSubdomainFromHost()
         {
             var config = new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
                 LoginStateSecret = new string('a', 32),
-                LoginUrl = "https://{tenant_domain}.example.com/login",
-                RedirectUri = "https://{tenant_domain}.example.com/callback",
+                LoginUrl = "https://{tenant_name}.example.com/login",
+                RedirectUri = "https://{tenant_name}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                ParseTenantFromRootDomain = "example.com",
                 AutoConfigureEnabled = false,
             };
             WristbandAuthService service = setupWristbandAuthService(config);
@@ -414,17 +411,16 @@ namespace Wristband.AspNet.Auth.Tests
         }
 
         [Fact]
-        public async Task Logout_Should_HandleTenantDomainTokenWithCustomDomainSeparator_BackwardsCompat()
+        public async Task Logout_Should_UseTenantSubdomainWithCustomDomainSeparator()
         {
             var config = new WristbandAuthConfig
             {
                 ClientId = "valid-client-id",
                 ClientSecret = "valid-client-secret",
                 LoginStateSecret = new string('a', 32),
-                LoginUrl = "https://{tenant_domain}.example.com/login",
-                RedirectUri = "https://{tenant_domain}.example.com/callback",
+                LoginUrl = "https://{tenant_name}.example.com/login",
+                RedirectUri = "https://{tenant_name}.example.com/callback",
                 WristbandApplicationVanityDomain = "example.com",
-                ParseTenantFromRootDomain = "example.com",
                 IsApplicationCustomDomainActive = true,
                 AutoConfigureEnabled = false,
             };

@@ -24,10 +24,10 @@ public class WristbandAuthConfig
     /// <param name="loginStateSecret">A secret (32 or more characters in length) used for encryption and decryption of login state cookies.</param>
     /// <param name="loginUrl">The URL for initiating the login request.</param>
     /// <param name="redirectUri">The redirect URI for callback after authentication.</param>
-    /// <param name="parseTenantFromRootDomain">The root domain for your application.</param>
     /// <param name="scopes">The scopes required for authentication.</param>
     /// <param name="tokenExpirationBuffer">Buffer time (in seconds) to subtract from the access token’s expiration time. This causes the token to be treated as expired before its actual expiration, helping to avoid token expiration during API calls.</param>
     /// <param name="wristbandApplicationVanityDomain">The vanity domain of the Wristband application.</param>
+    /// <param name="applicationAuthorizationRequestsEnabled">Whether application-level authorization requests are enabled. Defaults to true.</param>
     public WristbandAuthConfig(
         string? clientId,
         string? clientSecret,
@@ -37,11 +37,11 @@ public class WristbandAuthConfig
         string? wristbandApplicationVanityDomain,
         string? customApplicationLoginPageUrl,
         bool? dangerouslyDisableSecureCookies,
-        string? parseTenantFromRootDomain,
         List<string>? scopes,
         bool? isApplicationCustomDomainActive,
         int? tokenExpirationBuffer,
-        bool? autoConfigureEnabled = null)
+        bool? autoConfigureEnabled = null,
+        bool? applicationAuthorizationRequestsEnabled = null)
     {
         ClientId = clientId;
         ClientSecret = clientSecret;
@@ -51,12 +51,20 @@ public class WristbandAuthConfig
         WristbandApplicationVanityDomain = wristbandApplicationVanityDomain;
         CustomApplicationLoginPageUrl = customApplicationLoginPageUrl;
         DangerouslyDisableSecureCookies = dangerouslyDisableSecureCookies;
-        ParseTenantFromRootDomain = parseTenantFromRootDomain;
         Scopes = scopes;
         IsApplicationCustomDomainActive = isApplicationCustomDomainActive;
         TokenExpirationBuffer = tokenExpirationBuffer;
         AutoConfigureEnabled = autoConfigureEnabled;
+        ApplicationAuthorizationRequestsEnabled = applicationAuthorizationRequestsEnabled;
     }
+
+    /// <summary>
+    /// Gets or sets whether application-level authorization requests are enabled. Defaults to true, and is auto-configurable.
+    /// When enabled, if <c>Login()</c> cannot resolve a tenant from the request, it returns the Wristband Authorize Endpoint URL on
+    /// the application vanity domain, and Wristband handles tenant discovery within that same authorization flow. When disabled,
+    /// it returns the Application-Level Login (Tenant Discovery) Page URL instead.
+    /// </summary>
+    public bool? ApplicationAuthorizationRequestsEnabled { get; set; }
 
     /// <summary>
     /// Gets or sets whether the SDK should automatically configure some settings by calling the Wristband SDK Auto-Configuration Endpoint.
@@ -96,19 +104,17 @@ public class WristbandAuthConfig
     public string? LoginStateSecret { get; set; }
 
     /// <summary>
-    /// Gets or sets the URL for initiating the login request.
+    /// Gets or sets the URL for initiating the login request. If using tenant subdomains, it must contain the {tenant_name}
+    /// placeholder exactly once, as the leftmost part of the hostname (e.g. https://{tenant_name}.yourapp.io/auth/login).
+    /// The root domain for parsing tenant subdomains is derived from it by removing the {tenant_name} subdomain.
     /// </summary>
     public string? LoginUrl { get; set; }
 
     /// <summary>
-    /// Gets or sets the redirect URI for callback after authentication.
+    /// Gets or sets the redirect URI for callback after authentication. If using tenant subdomains, it must contain the
+    /// {tenant_name} placeholder exactly once, as the leftmost part of the hostname.
     /// </summary>
     public string? RedirectUri { get; set; }
-
-    /// <summary>
-    /// Gets or sets the root domain for your application.
-    /// </summary>
-    public string? ParseTenantFromRootDomain { get; set; }
 
     /// <summary>
     /// Gets or sets the list of scopes required for authentication.

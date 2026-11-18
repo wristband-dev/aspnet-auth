@@ -51,6 +51,12 @@ internal class LoginState
     public string CodeVerifier { get; set; }
 
     /// <summary>
+    /// Gets or sets when the login state was created, in milliseconds since the Unix epoch. It is used to enforce the
+    /// login state's 1-hour lifetime.
+    /// </summary>
+    public long CreatedAt { get; set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
+    /// <summary>
     /// Gets or sets custom state data for the login state.
     /// </summary>
     public Dictionary<string, object>? CustomState { get; set; }
