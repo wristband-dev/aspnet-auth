@@ -199,50 +199,15 @@ internal class WristbandApiClient : IWristbandApiClient
             { "refresh_token", refreshToken },
         };
 
-        return await WristbandApiRetry.WithRetry(async () =>
+        try
         {
-            var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
-            {
-                Content = new FormUrlEncodedContent(formParams),
-            };
-
-            request.Headers.Authorization = _basicAuthHeader;
-
-            try
-            {
-                var response = await _httpClient.SendAsync(request);
-                if (!response.IsSuccessStatusCode)
-                {
-                    if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
-                    {
-                        throw new WristbandError("invalid_refresh_token", "Invalid Refresh Token");
-                    }
-
-                    if ((int)response.StatusCode >= 500)
-                    {
-                        throw new WristbandError("unexpected_error", "Server error occurred. Retry later.");
-                    }
-                }
-
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
-
-                if (tokenResponse == null)
-                {
-                    throw new InvalidOperationException("Failed to deserialize token response.");
-                }
-
-                return tokenResponse;
-            }
-            catch (WristbandError)
-            {
-                throw;  // Propagate custom errors (4xx and non-retryable issues)
-            }
-            catch (Exception)
-            {
-                throw new WristbandError("unexpected_error", "An unexpected error occurred during the token refresh operation.");
-            }
-        });
+            return await RefreshTokenWithRetry(formParams);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            // A malformed response is wrapped only after the retry loop, so that it isn't retried.
+            throw new WristbandError("unexpected_error", "An unexpected error occurred during the token refresh operation.");
+        }
     }
 
     /// <summary>
@@ -358,5 +323,62 @@ internal class WristbandApiClient : IWristbandApiClient
         });
         var serviceProvider = services.BuildServiceProvider();
         return serviceProvider.GetRequiredService<IHttpClientFactory>();
+    }
+
+    /// <summary>
+    /// Calls the Wristband Token Endpoint with the refresh token grant, retrying transient failures.
+    /// </summary>
+    /// <param name="formParams">The form parameters for the token request.</param>
+    /// <returns>The token response.</returns>
+    private async Task<WristbandTokenResponse> RefreshTokenWithRetry(Dictionary<string, string> formParams)
+    {
+        return await WristbandApiRetry.WithRetry(async () =>
+        {
+            var request = new HttpRequestMessage(HttpMethod.Post, $"https://{_wristbandApplicationVanityDomain}/api/v1/oauth2/token")
+            {
+                Content = new FormUrlEncodedContent(formParams),
+            };
+
+            request.Headers.Authorization = _basicAuthHeader;
+
+            try
+            {
+                var response = await _httpClient.SendAsync(request);
+                if (!response.IsSuccessStatusCode)
+                {
+                    if ((int)response.StatusCode >= 400 && (int)response.StatusCode < 500)
+                    {
+                        throw new WristbandError("invalid_refresh_token", "Invalid Refresh Token");
+                    }
+
+                    if ((int)response.StatusCode >= 500)
+                    {
+                        throw new WristbandError("unexpected_error", "Server error occurred. Retry later.");
+                    }
+                }
+
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var tokenResponse = JsonSerializer.Deserialize<WristbandTokenResponse>(responseContent);
+
+                if (tokenResponse == null)
+                {
+                    throw new InvalidOperationException("Failed to deserialize token response.");
+                }
+
+                return tokenResponse;
+            }
+            catch (WristbandError)
+            {
+                throw;  // Propagate custom errors (4xx and non-retryable issues)
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                throw;  // Malformed response bodies aren't transient, so IsRetryableError() doesn't retry them
+            }
+            catch (Exception)
+            {
+                throw new WristbandError("unexpected_error", "An unexpected error occurred during the token refresh operation.");
+            }
+        });
     }
 }

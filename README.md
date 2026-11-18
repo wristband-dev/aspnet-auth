@@ -2219,7 +2219,7 @@ When a request hits an endpoint protected with `RequireWristbandJwt()`, the auth
 
 1. **Extracts the JWT** - Gets the token from the `Authorization: Bearer <token>` header
 2. **Verifies the signature** - Uses cached JWKS from Wristband to validate the token signature
-3. **Validates claims** - Checks expiration, issuer, audience, and other standard JWT claims
+3. **Validates claims** - Checks expiration, issuer, and other standard JWT claims
 4. **Populates HttpContext** - Stores the validated JWT and payload on the HttpContext, which is what makes `GetJwt()` and `GetJwtPayload()` work in your endpoint handlers
 
 If validation fails, the request is rejected with a `401 Unauthorized` response.
@@ -2275,7 +2275,7 @@ app.MapGet("/api/profile", (HttpContext httpContext) =>
 
 Most applications only need one authentication strategy: either session-based auth for web apps or JWT for stateless APIs. Multi-strategy authentication is for when your application needs to serve both at the same time. A common example is a web application that has browser-based users logging in with sessions, but also exposes API endpoints that external services or mobile clients hit with Bearer tokens. Rather than duplicating your endpoint logic into separate session-only and JWT-only routes, multi-strategy lets a single endpoint accept either method.
 
-`AddWristbandDefaultPolicies()` registers both the Session and JWT policies separately (`"WristbandSession"` and `"WristbandJwt"`), and you pick one per endpoint using `RequireWristbandSession()` or `RequireWristbandJwt()`. Multi-strategy is different since `AddWristbandMultiStrategyPolicy()` registers a single policy called `"WristbandMultiAuth"`, which is what `RequireWristbandMultiAuth()` enforces. Instead of picking one strategy per endpoint, that policy tries each strategy in the order you specify until one succeeds.
+`AddWristbandDefaultPolicies()` registers both the Session and JWT policies separately (`"WristbandSession"` and `"WristbandJwt"`), and you pick one per endpoint using `RequireWristbandSession()` or `RequireWristbandJwt()`. Multi-strategy is different since `AddWristbandMultiStrategyPolicy()` registers a single policy called `"WristbandMultiAuth"`, which is what `RequireWristbandMultiAuth()` enforces. Instead of picking one strategy per endpoint, that policy checks the strategies in the order you specify and uses the first one whose credential is in the request.
 
 #### Setup
 
@@ -2311,7 +2311,7 @@ builder.Services.AddWristbandAuthorizationHandler();
 // Add authorization policies
 builder.Services.AddAuthorization(options =>
 {
-    // Add "WristbandMultiAuth" policy: try Session first, fall back to JWT.
+    // Add "WristbandMultiAuth" policy: check Session first, then JWT.
     // Endpoints using RequireWristbandMultiAuth() will accept either.
     options.AddWristbandMultiStrategyPolicy([AuthStrategy.Session, AuthStrategy.Jwt]);
 });
@@ -2327,15 +2327,25 @@ app.Run();
 
 #### Strategy Order
 
-Strategies are tried in the order you specify. The first strategy that successfully authenticates the request is used:
+Strategies are checked in the order you specify, and they're meant for requests that carry one credential or the other. A strategy is skipped only when its credential is missing: no session cookie for SESSION, or no `Authorization` header for JWT. When a credential is present but fails, the request is rejected right away, and later strategies aren't tried:
 
 ```csharp
-// Try SESSION first, fall back to JWT for API clients
+// Check SESSION first, then JWT for API clients
 options.AddWristbandMultiStrategyPolicy([AuthStrategy.Session, AuthStrategy.Jwt]);
 
-// Or try JWT first, fall back to SESSION
+// Or check JWT first, then SESSION
 options.AddWristbandMultiStrategyPolicy([AuthStrategy.Jwt, AuthStrategy.Session]);
 ```
+
+For example, with `[AuthStrategy.Session, AuthStrategy.Jwt]`:
+
+| Request sent | Response |
+| ------------ | -------- |
+| Session only, CSRF header wrong | `403 Forbidden` |
+| Bearer token only, valid | `200 OK` (SESSION is skipped) |
+| Bearer token only, expired | `401 Unauthorized` |
+| Both, CSRF header wrong, token valid | `403 Forbidden` (SESSION fails first, JWT isn't tried) |
+| Neither | `401 Unauthorized` |
 
 #### Using the Multi-Strategy Policy
 
@@ -2383,17 +2393,17 @@ mixedRoutes.MapGet("/users", (HttpContext httpContext) =>
 
 When a request hits an endpoint protected with `RequireWristbandMultiAuth()`, the authorization handler:
 
-1. **Tries the first strategy** (e.g., SESSION) - Validates session cookie and refreshes tokens if needed
-2. **If first strategy fails, tries the second** (e.g., JWT) - Validates JWT bearer token
-3. **Returns success** - If any strategy succeeds
-4. **Returns error response** - If all strategies fail
+1. **Finds the first strategy whose credential is in the request** - A session cookie for SESSION, or an `Authorization` header for JWT. Strategies without their credential are skipped.
+2. **Validates that credential** - For SESSION, validates the session cookie and CSRF token, and refreshes tokens if needed. For JWT, validates the Bearer token.
+3. **Returns success** - If that strategy succeeds
+4. **Returns error response** - If that strategy fails, or if the request carries no credential for any strategy. Later strategies aren't tried.
 
 The `RequireWristbandMultiAuth()` policy can result in the following responses:
 
 | Response | Condition |
 | -------- | --------- |
 | `ArgumentException` | Thrown at startup if the strategies array passed to `AddWristbandMultiStrategyPolicy()` is empty or contains duplicates. |
-| `401 Unauthorized` | If all authentication strategies fail. |
+| `401 Unauthorized` | If the request carries no credential for any strategy, or the first credential it carries fails (e.g. an expired Bearer token, an invalid session, or a failed token refresh). |
 | `403 Forbidden` | If CSRF validation fails (when using session auth with CSRF protection enabled). |
 
 <br>

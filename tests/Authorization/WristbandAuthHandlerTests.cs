@@ -262,6 +262,36 @@ public class WristbandAuthHandlerTests
         Assert.False(result);
     }
 
+    [Theory]
+    [InlineData("session-tok")]
+    [InlineData("session-token-extra")]
+    [InlineData("SESSION-TOKEN")]
+    public async Task TrySessionAuth_FailsWhenCsrfHeaderDiffersFromSessionToken(string headerToken)
+    {
+        var csrfOptions = new WristbandCsrfOptions
+        {
+            EnableCsrfProtection = true,
+            CsrfHeaderName = "X-CSRF-TOKEN"
+        };
+
+        var handler = new WristbandAuthHandler(
+            _mockAuthService.Object,
+            _mockHttpContextAccessor.Object,
+            Options.Create(csrfOptions));
+
+        var claims = new[]
+        {
+            new Claim("userId", "test-user"),
+            new Claim("csrf_token", "session-token")
+        };
+        var httpContext = CreateAuthenticatedHttpContext(CookieAuthenticationDefaults.AuthenticationScheme, true, claims);
+        httpContext.Request.Headers["X-CSRF-TOKEN"] = headerToken;
+
+        var result = await InvokeTrySessionAuth(httpContext, handler);
+
+        Assert.False(result);
+    }
+
     [Fact]
     public async Task TrySessionAuth_FailsWhenCsrfTokenMissing()
     {
@@ -334,14 +364,29 @@ public class WristbandAuthHandlerTests
         httpContext.RequestServices = services.BuildServiceProvider();
         httpContext.User = principal;
 
+        // Strategies are skipped when the request doesn't carry their credential, so include the one for this scheme.
+        if (scheme == JwtBearerDefaults.AuthenticationScheme)
+        {
+            httpContext.Request.Headers.Authorization = "Bearer test-token";
+        }
+        else
+        {
+            httpContext.Request.Headers.Cookie = "session=test-session";
+        }
+
         return httpContext;
     }
 
     private async Task<bool> InvokeTrySessionAuth(HttpContext httpContext, WristbandAuthHandler? handler = null)
     {
+        return await InvokeTrySessionAuthReason(httpContext, handler) == null;
+    }
+
+    private async Task<string?> InvokeTrySessionAuthReason(HttpContext httpContext, WristbandAuthHandler? handler = null)
+    {
         handler ??= _handler;
         var method = typeof(WristbandAuthHandler).GetMethod("TrySessionAuth", BindingFlags.NonPublic | BindingFlags.Instance);
-        var task = (Task<bool>)method!.Invoke(handler, new object[] { httpContext })!;
+        var task = (Task<string?>)method!.Invoke(handler, new object[] { httpContext })!;
         return await task;
     }
 
@@ -349,8 +394,8 @@ public class WristbandAuthHandlerTests
     {
         handler ??= _handler;
         var method = typeof(WristbandAuthHandler).GetMethod("TryJwtAuth", BindingFlags.NonPublic | BindingFlags.Instance);
-        var task = (Task<bool>)method!.Invoke(handler, new object[] { httpContext })!;
-        return await task;
+        var task = (Task<string?>)method!.Invoke(handler, new object[] { httpContext })!;
+        return await task == null;
     }
 
     [Fact]

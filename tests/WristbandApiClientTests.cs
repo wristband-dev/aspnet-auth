@@ -634,6 +634,35 @@ public class WristbandApiClientTests
         Assert.Equal("An unexpected error occurred during the token refresh operation.", exception.ErrorDescription);
     }
 
+    // A malformed response body isn't transient, so it is reported without retrying.
+    [Theory]
+    [InlineData("<html>Bad Gateway</html>")]
+    [InlineData("null")]
+    public async Task RefreshToken_MalformedResponse_ThrowsWristbandErrorWithoutRetrying(string content)
+    {
+        SetupHttpResponse(HttpStatusCode.OK, content);
+
+        var exception = await Assert.ThrowsAsync<WristbandError>(
+            () => _wristbandApiClient.RefreshToken("valid-refresh-token"));
+
+        Assert.Equal("unexpected_error", exception.Error);
+        Assert.Equal("An unexpected error occurred during the token refresh operation.", exception.ErrorDescription);
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Once());
+    }
+
+    [Fact]
+    public async Task RefreshToken_NetworkError_RetriesThreeTimes()
+    {
+        _mockHttpMessageHandler
+            .Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ThrowsAsync(new HttpRequestException("Network error"));
+
+        await Assert.ThrowsAsync<WristbandError>(() => _wristbandApiClient.RefreshToken("valid-refresh-token"));
+
+        VerifyHttpRequest(HttpMethod.Post, $"https://{_domain}/api/v1/oauth2/token", Times.Exactly(3));
+    }
+
     // ////////////////////////////////////
     //  REVOKE REFRESH TOKEN TESTS
     // ////////////////////////////////////

@@ -1,10 +1,13 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 namespace Wristband.AspNet.Auth;
@@ -15,6 +18,8 @@ namespace Wristband.AspNet.Auth;
 /// </summary>
 public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequirement>
 {
+    private const string DefaultSessionCookieName = "session";
+
     private readonly IWristbandAuthService _wristbandAuth;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly WristbandCsrfOptions _csrfOptions;
@@ -36,10 +41,16 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
     }
 
     /// <summary>
-    /// Handles the authorization requirement by attempting each configured authentication strategy in order.
+    /// Handles the authorization requirement by checking each configured authentication strategy in order.
     /// </summary>
+    /// <remarks>
+    /// A strategy is skipped when the request doesn't carry its credential: no session cookie for SESSION, or no
+    /// Authorization header for JWT. When a credential is present but fails, the requirement fails right away with
+    /// that strategy's <see cref="WristbandAuthFailureReason"/>, and later strategies aren't tried. When every
+    /// strategy is skipped, the requirement fails with <see cref="WristbandAuthFailureReason.NotAuthenticated"/>.
+    /// </remarks>
     /// <param name="context">The authorization handler context.</param>
-    /// <param name="requirement">The Wristband authentication requirement containing strategies to try.</param>
+    /// <param name="requirement">The Wristband authentication requirement containing strategies to check.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
     protected override async Task HandleRequirementAsync(AuthorizationHandlerContext context, WristbandAuthRequirement requirement)
     {
@@ -50,25 +61,82 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
             return;
         }
 
-        // Try each strategy in order until one succeeds
+        // Check the auth strategies in sequential order
         foreach (var strategy in requirement.Strategies)
         {
-            bool success = strategy switch
+            // Skip to the next strategy when the request doesn't carry this strategy's credential.
+            if (!HasCredential(httpContext, strategy))
+            {
+                continue;
+            }
+
+            // The credential is present, so its result is final: later strategies aren't tried.
+            var failureReason = strategy switch
             {
                 AuthStrategy.Session => await TrySessionAuth(httpContext),
                 AuthStrategy.Jwt => await TryJwtAuth(httpContext),
-                _ => false,
+                _ => WristbandAuthFailureReason.NotAuthenticated,
             };
 
-            if (success)
+            if (failureReason == null)
             {
                 context.Succeed(requirement);
-                return;
             }
+            else
+            {
+                context.Fail(new WristbandAuthFailureReason(this, failureReason));
+            }
+
+            return;
         }
 
-        // All strategies failed
-        context.Fail();
+        // Every strategy was skipped because the request carried no credentials.
+        context.Fail(new WristbandAuthFailureReason(this, WristbandAuthFailureReason.NotAuthenticated));
+    }
+
+    /// <summary>
+    /// Checks whether the request carries the credential for an auth strategy: a session cookie for SESSION, or an
+    /// Authorization header for JWT. Only presence is checked, not validity.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context for the current request.</param>
+    /// <param name="strategy">The auth strategy to check.</param>
+    /// <returns><c>true</c> if the credential is present; otherwise, <c>false</c>.</returns>
+    private static bool HasCredential(HttpContext httpContext, AuthStrategy strategy)
+    {
+        return strategy switch
+        {
+            AuthStrategy.Session => httpContext.Request.Cookies.ContainsKey(GetSessionCookieName(httpContext)),
+            AuthStrategy.Jwt => !string.IsNullOrEmpty(httpContext.Request.Headers.Authorization.ToString()),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Gets the session cookie name from the cookie authentication options, which UseWristbandSessionConfig() sets
+    /// to "session". A session too large for one cookie is split into chunks, but the first chunk keeps this name.
+    /// </summary>
+    /// <param name="httpContext">The HTTP context for the current request.</param>
+    /// <returns>The session cookie name.</returns>
+    private static string GetSessionCookieName(HttpContext httpContext)
+    {
+        var cookieOptions = httpContext.RequestServices?
+            .GetService<IOptionsMonitor<CookieAuthenticationOptions>>()?
+            .Get(CookieAuthenticationDefaults.AuthenticationScheme);
+        return cookieOptions?.Cookie.Name ?? DefaultSessionCookieName;
+    }
+
+    /// <summary>
+    /// Compares the session's CSRF token to the request header's in constant time, so that the time taken doesn't
+    /// reveal how much of the header value matched.
+    /// </summary>
+    /// <param name="sessionToken">The CSRF token stored in the session.</param>
+    /// <param name="headerToken">The CSRF token sent in the request header.</param>
+    /// <returns><c>true</c> if the tokens are equal; otherwise, <c>false</c>.</returns>
+    private static bool CsrfTokensMatch(string sessionToken, string headerToken)
+    {
+        return CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(sessionToken),
+            Encoding.UTF8.GetBytes(headerToken));
     }
 
     /// <summary>
@@ -77,7 +145,7 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
     /// <param name="httpContext">The HTTP context for the current request.</param>
     /// <returns>
     /// A task that represents the asynchronous operation.
-    /// The task result contains <c>true</c> if session authentication succeeded; otherwise, <c>false</c>.
+    /// The task result is <c>null</c> if session authentication succeeded; otherwise, the failure reason.
     /// </returns>
     /// <remarks>
     /// This method:
@@ -88,13 +156,13 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
     /// <item>Sets a flag for the auto-save middleware to persist session changes</item>
     /// </list>
     /// </remarks>
-    private async Task<bool> TrySessionAuth(HttpContext httpContext)
+    private async Task<string?> TrySessionAuth(HttpContext httpContext)
     {
         // Check session exists and is authenticated
         var authResult = await httpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         if (!authResult.Succeeded || authResult.Principal == null)
         {
-            return false;
+            return WristbandAuthFailureReason.NotAuthenticated;
         }
 
         // Validate CSRF token if protection is enabled
@@ -103,9 +171,10 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
             var sessionToken = httpContext.User.FindFirst("csrf_token")?.Value;
             var headerToken = httpContext.Request.Headers[_csrfOptions.CsrfHeaderName].ToString();
 
-            if (string.IsNullOrEmpty(sessionToken) || sessionToken != headerToken)
+            if (string.IsNullOrEmpty(sessionToken) || !CsrfTokensMatch(sessionToken, headerToken))
             {
-                return false;
+                httpContext.Items["WristbandCsrfFailure"] = true;
+                return WristbandAuthFailureReason.CsrfFailed;
             }
         }
 
@@ -138,14 +207,14 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
             }
             catch (Exception)
             {
-                // Token refresh errors shouldn't break the broader validation expectatios
-                return false;
+                // Token refresh errors shouldn't break the broader validation expectations
+                return WristbandAuthFailureReason.TokenRefreshFailed;
             }
         }
 
         // Set flag for auto-save middleware for rolling sessions
         httpContext.Items["WristbandSessionNeedsSave"] = true;
-        return true;
+        return null;
     }
 
     /// <summary>
@@ -154,15 +223,15 @@ public class WristbandAuthHandler : AuthorizationHandler<WristbandAuthRequiremen
     /// <param name="httpContext">The HTTP context for the current request.</param>
     /// <returns>
     /// A task that represents the asynchronous operation.
-    /// The task result contains <c>true</c> if JWT validation succeeded; otherwise, <c>false</c>.
+    /// The task result is <c>null</c> if JWT validation succeeded; otherwise, the failure reason.
     /// </returns>
     /// <remarks>
     /// This method validates the JWT from the Authorization header using the Wristband JWT validator.
     /// Unlike session auth, JWT validation does not require token refresh as JWTs are stateless.
     /// </remarks>
-    private async Task<bool> TryJwtAuth(HttpContext httpContext)
+    private async Task<string?> TryJwtAuth(HttpContext httpContext)
     {
         var authResult = await httpContext.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme);
-        return authResult.Succeeded && authResult.Principal != null;
+        return authResult.Succeeded && authResult.Principal != null ? null : WristbandAuthFailureReason.NotAuthenticated;
     }
 }

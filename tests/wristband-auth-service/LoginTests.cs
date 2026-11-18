@@ -351,43 +351,64 @@ public class LoginTests
         Assert.Contains("More than one [return_url] query parameter was encountered", ex.Message);
     }
 
+    // The return URL is kept in the Login State Cookie at any length.
     [Fact]
-    public async Task Login_WithReturnUrlTooLong_StillGeneratesUrl()
+    public async Task Login_WithReturnUrlOver512Chars_KeepsReturnUrlInLoginState()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        // Create a return URL longer than 450 characters
-        var longReturnUrl = "/dashboard/" + new string('a', 450);
+        var longReturnUrl = "/dashboard/" + new string('a', 600);
         var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url={longReturnUrl}");
 
-        // Suppress console output during test
-        var originalOut = Console.Out;
-        try
-        {
-            Console.SetOut(TextWriter.Null);
-            var result = await service.Login(httpContext, null);
+        var result = await service.Login(httpContext, null);
 
-            // Should still generate URL successfully (return URL is ignored internally)
-            Assert.StartsWith("https://tenant1-", result);
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
+        Assert.StartsWith("https://tenant1-", result);
+        var cookie = httpContext.Response.Headers.GetCommaSeparatedValues("Set-Cookie").Single(c => c.StartsWith("login#"));
+        var cookieValue = HttpUtility.UrlDecode(cookie.Split(";")[0].Split("=", 2)[1]);
+        var loginState = new LoginStateHandler().DecryptLoginState(cookieValue, _defaultConfig.LoginStateSecret!);
+        Assert.Equal(longReturnUrl, loginState.ReturnUrl);
     }
 
     [Fact]
-    public async Task Login_WithReturnUrlExactly450Chars_GeneratesUrl()
+    public async Task Login_WithReturnUrlOf512Chars_AddsStateToAppLevelLoginUrl()
     {
         var service = SetupWristbandAuthService(_defaultConfig);
-        // Create a return URL exactly 450 characters
-        var returnUrl = "/dashboard/" + new string('a', 439);
-        Assert.Equal(450, returnUrl.Length);
+        var returnUrl = "/dashboard/" + new string('a', 501);
+        Assert.Equal(512, returnUrl.Length);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"return_url={returnUrl}");
 
-        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name=tenant1&return_url={returnUrl}");
         var result = await service.Login(httpContext, null);
 
-        // Should generate URL successfully
-        Assert.StartsWith("https://tenant1-", result);
+        var expectedUrl = $"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}&state={Uri.EscapeDataString(returnUrl)}";
+        Assert.Equal(expectedUrl, result);
+    }
+
+    // Wristband limits the state query parameter to 512 characters, so a longer return URL is left out.
+    [Fact]
+    public async Task Login_WithReturnUrlOver512Chars_LeavesStateOutOfAppLevelLoginUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var returnUrl = "/dashboard/" + new string('a', 502);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"return_url={returnUrl}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    // The raw value is checked, not the URL-encoded one, since Wristband validates the decoded state value.
+    [Fact]
+    public async Task Login_WithReturnUrlUnder512CharsThatEncodesLonger_AddsStateToAppLevelLoginUrl()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var returnUrl = "/search?q=" + string.Concat(Enumerable.Repeat("a b", 160));
+        Assert.True(returnUrl.Length <= 512);
+        Assert.True(Uri.EscapeDataString(returnUrl).Length > 512);
+        var loginConfig = new LoginConfig { ReturnUrl = returnUrl };
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        Assert.EndsWith($"&state={Uri.EscapeDataString(returnUrl)}", result);
     }
 
     [Fact]
@@ -589,6 +610,125 @@ public class LoginTests
 
         await service.Login(httpContext, null);
 
+        _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
+    }
+
+    // An invalid tenant name could otherwise redirect users off Wristband, e.g. evil.com# makes the browser go to
+    // https://evil.com#-wristband.example.com/... instead.
+    [Theory]
+    [InlineData("evil.com%23")]
+    [InlineData("evil.com")]
+    [InlineData("tenant%2Fpath")]
+    [InlineData("-tenant")]
+    [InlineData("tenant-")]
+    [InlineData("customer01%0A")]
+    [InlineData("%E2%84%AA")]
+    public async Task Login_WithInvalidTenantNameParam_IgnoresTenantName(string tenantNameParam)
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantNameParam}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantNameParam_FallsThroughToDefaultTenantName()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_name=evil.com%23");
+
+        var result = await service.Login(httpContext, new LoginConfig { DefaultTenantName = "default-tenant" });
+
+        Assert.StartsWith($"https://default-tenant-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    [Fact]
+    public async Task Login_WithTenantNameAt63Characters_UsesTenantName()
+    {
+        var tenantName = new string('a', 63);
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={tenantName}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith($"https://{tenantName}-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    [Fact]
+    public async Task Login_WithTenantNameOver63Characters_IgnoresTenantName()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", $"tenant_name={new string('a', 64)}");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantSubdomain_IgnoresTenantName()
+    {
+        var config = new WristbandAuthConfig
+        {
+            ClientId = _defaultConfig.ClientId,
+            ClientSecret = _defaultConfig.ClientSecret,
+            LoginStateSecret = _defaultConfig.LoginStateSecret,
+            LoginUrl = "https://{tenant_name}.example.com/login",
+            RedirectUri = "https://{tenant_name}.example.com/callback",
+            WristbandApplicationVanityDomain = _defaultConfig.WristbandApplicationVanityDomain,
+            AutoConfigureEnabled = false,
+            ApplicationAuthorizationRequestsEnabled = false,
+        };
+        var service = SetupWristbandAuthService(config);
+        var httpContext = TestUtils.setupHttpContext("bad_tenant.example.com");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Theory]
+    [InlineData("evil.com#")]
+    [InlineData("tenant.example.com/path")]
+    [InlineData("tenant.example.com:8443")]
+    [InlineData("user@tenant.example.com")]
+    public async Task Login_WithInvalidDefaultTenantCustomDomain_FallsThroughToDefaultTenantName(string defaultTenantCustomDomain)
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+        var loginConfig = new LoginConfig
+        {
+            DefaultTenantCustomDomain = defaultTenantCustomDomain,
+            DefaultTenantName = "default-tenant",
+        };
+
+        var result = await service.Login(httpContext, loginConfig);
+
+        Assert.StartsWith($"https://default-tenant-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidDefaultTenantName_IgnoresDefaultTenantName()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com");
+
+        var result = await service.Login(httpContext, new LoginConfig { DefaultTenantName = "evil.com#" });
+
+        Assert.Equal($"https://{_defaultConfig.WristbandApplicationVanityDomain}/login?client_id={_defaultConfig.ClientId}", result);
+    }
+
+    [Fact]
+    public async Task Login_WithInvalidTenantCustomDomainParam_SkipsValidationApiCall()
+    {
+        var service = SetupWristbandAuthService(_defaultConfig);
+        var httpContext = TestUtils.setupHttpContext("app.example.com", "tenant_custom_domain=evil.com%23&tenant_name=tenant1");
+
+        var result = await service.Login(httpContext, null);
+
+        Assert.StartsWith($"https://tenant1-{_defaultConfig.WristbandApplicationVanityDomain}/api/v1/oauth2/authorize?", result);
         _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
     }
 

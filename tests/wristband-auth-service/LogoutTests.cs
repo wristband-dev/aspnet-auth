@@ -245,7 +245,25 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com", logoutUrl);
+            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https%3A%2F%2Fpost-logout.com", logoutUrl);
+        }
+
+        // A redirect URL with its own query string would otherwise add parameters to the Wristband Logout URL.
+        [Fact]
+        public async Task Logout_Should_UrlEncodeRedirectUrlParam_WhenRedirectUrlHasQueryString()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com", "tenant_name=test-tenant");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                RedirectUrl = "https://post-logout.com/bye?from=app&client_id=other"
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Equal(
+                "https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https%3A%2F%2Fpost-logout.com%2Fbye%3Ffrom%3Dapp%26client_id%3Dother",
+                logoutUrl);
         }
 
         // Test refresh token revocation scenarios
@@ -385,7 +403,7 @@ namespace Wristband.AspNet.Auth.Tests
 
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
-            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https://post-logout.com&state=custom-state", logoutUrl);
+            Assert.Equal("https://test-tenant-example.com/api/v1/logout?client_id=valid-client-id&redirect_url=https%3A%2F%2Fpost-logout.com&state=custom-state", logoutUrl);
         }
 
 
@@ -524,6 +542,64 @@ namespace Wristband.AspNet.Auth.Tests
             var logoutUrl = await service.Logout(httpContext, logoutConfig);
 
             Assert.Equal("https://custom-tenant.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+            _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
+        }
+
+        // An invalid tenant name could otherwise redirect users off Wristband, e.g. evil.com# makes the browser go to
+        // https://evil.com#-example.com/... instead.
+        [Theory]
+        [InlineData("evil.com%23")]
+        [InlineData("evil.com")]
+        [InlineData("customer01%0A")]
+        public async Task Logout_Should_IgnoreInvalidTenantNameFromQuery(string tenantNameParam)
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com", $"tenant_name={tenantNameParam}");
+
+            var logoutUrl = await service.Logout(httpContext, new LogoutConfig());
+
+            Assert.Equal("https://example.com/login?client_id=valid-client-id", logoutUrl);
+        }
+
+        [Fact]
+        public async Task Logout_Should_IgnoreInvalidTenantNameFromConfig()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com", "tenant_name=query-tenant");
+
+            var logoutUrl = await service.Logout(httpContext, new LogoutConfig { TenantName = "evil.com#" });
+
+            Assert.Equal("https://query-tenant-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+        }
+
+        [Theory]
+        [InlineData("evil.com#")]
+        [InlineData("custom-tenant.com/path")]
+        [InlineData("custom-tenant.com:8443")]
+        public async Task Logout_Should_IgnoreInvalidTenantCustomDomainFromConfig(string tenantCustomDomain)
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com");
+            LogoutConfig logoutConfig = new LogoutConfig
+            {
+                TenantCustomDomain = tenantCustomDomain,
+                TenantName = "config-tenant",
+            };
+
+            var logoutUrl = await service.Logout(httpContext, logoutConfig);
+
+            Assert.Equal("https://config-tenant-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
+        }
+
+        [Fact]
+        public async Task Logout_Should_SkipValidationApiCall_WhenQueryCustomDomainIsMalformed()
+        {
+            WristbandAuthService service = setupWristbandAuthService(_defaultConfig);
+            var httpContext = TestUtils.setupHttpContext("some-host.com", "tenant_custom_domain=evil.com%23&tenant_name=query-tenant");
+
+            var logoutUrl = await service.Logout(httpContext, new LogoutConfig());
+
+            Assert.Equal("https://query-tenant-example.com/api/v1/logout?client_id=valid-client-id", logoutUrl);
             _mockApiClient.Verify(m => m.ValidateTenantCustomDomain(It.IsAny<string>()), Times.Never);
         }
 
